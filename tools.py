@@ -7,10 +7,11 @@ import voice_state
 import narration
 from agentphone_client import end_call as agentphone_end_call
 from agentphone_client import send_message
-from browser_agent import check_d2l_grades
+from browser_agent import check_d2l_grades, create_d2l_session, stream_until_done
 from config import (
     BROWSER_USE_FETCH_TIMEOUT_SECONDS,
     KID_VERIFICATION_TIMEOUT_SECONDS,
+    PUBLIC_URL,
     VOICE_NARRATION_INTERVAL_SECONDS,
 )
 from db import (
@@ -210,16 +211,7 @@ async def dispatch_tool(
 
     if name == "check_d2l_grades":
         student_name = str(args.get("student_name", "")).strip()
-        result = await check_d2l_grades(student_name)
-        # Signal to the orchestrator that we should notify the kid AFTER the
-        # parent's reply has been sent.
-        ctx["notify_kid_about_grades"] = True
-        # Fire-and-forget grade snapshot to memory (no-op if Supermemory disabled).
-        family_id = ctx.get("family_id")
-        if family_id is not None:
-            memory.fire_and_forget(
-                memory.snapshot_grades(family_id, student_name, result)
-            )
+        result = await _dispatch_check_grades(sender_phone, student_name, ctx)
         return result
 
     if name == "remember_fact":
@@ -372,6 +364,55 @@ async def _confirm_kid(*, kid_phone: str) -> str:
             log.exception("Failed to notify parent of verification")
 
     return f"{kid['name']} verified. Parent has been notified."
+
+
+MAX_STEP_MESSAGES = 5
+
+
+async def _dispatch_check_grades(sender_phone: str, student_name: str, ctx: dict) -> str:
+    """Create cloud browser session, send live link, stream steps, return grades."""
+    live_sessions = ctx.get("live_sessions")
+
+    # 1. Create session + task — returns instantly with live_url
+    task_id, session_id, live_url = await create_d2l_session(student_name)
+
+    # 2. Register for /live/{session_id} route
+    if live_sessions is not None and live_url:
+        live_sessions[session_id] = live_url
+
+    # 3. Text parent the live link before agent starts navigating
+    if live_url:
+        try:
+            await send_message(
+                sender_phone,
+                f"Checking now — watch live: {PUBLIC_URL}/live/{session_id}",
+            )
+        except Exception:
+            log.exception("Failed to send live link")
+
+    # 4. Stream steps as iMessages
+    steps_sent = 0
+
+    async def on_step(summary: str):
+        nonlocal steps_sent
+        if steps_sent < MAX_STEP_MESSAGES:
+            try:
+                await send_message(sender_phone, summary)
+                steps_sent += 1
+            except Exception:
+                log.exception("Failed to send step update")
+
+    # 5. Block until done (poll-based since we created session + task separately)
+    result = await stream_until_done(task_id, on_step=on_step)
+
+    ctx["notify_kid_about_grades"] = True
+    # Fire-and-forget grade snapshot to memory (no-op if Supermemory disabled).
+    family_id = ctx.get("family_id")
+    if family_id is not None:
+        memory.fire_and_forget(
+            memory.snapshot_grades(family_id, student_name, result)
+        )
+    return result
 
 
 def normalize_phone(phone: str) -> str:

@@ -3,4 +3,4 @@ uvicorn[standard]
 python-dotenv
 httpx
 openai
-browser-use
+browser-use-sdk

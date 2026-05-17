@@ -29,8 +29,12 @@ ORCHESTRATOR_MODEL = _env(
     "ORCHESTRATOR_MODEL", default="gpt-5.4-nano-2026-03-17"
 )
 
-# Browser Use
+# Browser Use (cloud SDK)
 BROWSER_USE_API_KEY = _env("BROWSER_USE_API_KEY")
+BROWSER_USE_PROFILE_ID = _env("BROWSER_USE_PROFILE_ID")
+
+# Public URL (ngrok or deployed domain — used for live view links)
+PUBLIC_URL = _env("PUBLIC_URL", default="http://localhost:8000")
 
 # Supermemory (semantic family memory — see rfc-7.md)
 SUPERMEMORY_API_KEY = _env("SUPERMEMORY_API_KEY")

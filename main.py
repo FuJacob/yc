@@ -3,6 +3,7 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request
+from fastapi.responses import HTMLResponse
 
 import voice_state
 from agent import handle_inbound
@@ -26,10 +27,46 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="FamilyOps", lifespan=lifespan)
 
+# In-memory mapping of session_id -> live_url for browser streaming (RFC-1)
+_live_sessions: dict[str, str] = {}
+
+LIVE_PAGE_HTML = """<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes">
+  <style>
+    body {{ margin: 0; background: #111; color: #fff; font-family: system-ui; }}
+    header {{ padding: 12px 16px; font-size: 14px; opacity: 0.7; }}
+    .viewer {{
+      width: 100%; height: calc(100vh - 44px);
+      overflow: auto; -webkit-overflow-scrolling: touch;
+    }}
+    iframe {{
+      width: 100%; height: 100%; border: none;
+      pointer-events: none;
+    }}
+  </style>
+</head>
+<body>
+  <header>FamilyOps — checking grades...</header>
+  <div class="viewer">
+    <iframe src="{live_url}&theme=dark&ui=false" allow="autoplay"></iframe>
+  </div>
+</body>
+</html>"""
+
 
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.get("/live/{session_id}")
+async def live_view(session_id: str):
+    live_url = _live_sessions.get(session_id)
+    if not live_url:
+        raise HTTPException(status_code=404, detail="Session not found or expired")
+    return HTMLResponse(LIVE_PAGE_HTML.format(live_url=live_url))
 
 
 @app.post("/webhook")
@@ -91,6 +128,7 @@ async def _process_inbound(
             sender_phone=from_number,
             message_text=message_text,
             recent_history=recent_history,
+            live_sessions=_live_sessions,
         )
     except Exception:
         log.exception("handle_inbound failed")

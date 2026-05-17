@@ -94,6 +94,7 @@ async def handle_inbound(
     sender_phone: str,
     message_text: str,
     recent_history: Optional[list[dict]] = None,
+    live_sessions: Optional[dict] = None,
 ) -> tuple[Optional[str], dict]:
     """Run the orchestrator loop. Returns (final reply text, side-effect ctx)."""
 
@@ -102,6 +103,7 @@ async def handle_inbound(
     ctx: dict = {
         "notify_kid_about_grades": False,
         "family_id": family_id,
+        "live_sessions": live_sessions,
     }
 
     # Fire recall + build the DB context block. Both run in parallel —
