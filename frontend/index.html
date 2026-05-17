@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Kiddio — One agent for the whole family</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<!-- Animated background blobs -->
+<div class="bg-wrap" aria-hidden="true">
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+  <div class="blob blob-3"></div>
+  <div class="blob blob-4"></div>
+  <div class="grain"></div>
+</div>
+
+<!-- Nav -->
+<header class="nav">
+  <a href="#" class="logo logo-full">
+    <!-- If you save the brand PNG as kiddio-logo.png in this folder,
+         this <img> will replace the inline mark+wordmark automatically. -->
+    <img src="Adobe Express - file.png" alt="Kiddio" class="logo-img"
+         onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-flex';"/>
+    <span class="logo-inline">
+      <span class="logo-mark logo-mark-lg">
+        <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M16 3 L27 11 V22 Q27 24 25 24 H11 L7 28 V11 Z"
+                stroke="#e8624a" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+          <circle cx="11.5" cy="14" r="1.8" fill="#93a87d"/>
+          <path d="M9 22 Q9 18.5 14 18.5 Q14 22 14 22 Z" fill="#93a87d"/>
+          <circle cx="20.5" cy="14" r="1.8" fill="#8a93c4"/>
+          <path d="M18 22 Q18 18.5 23 18.5 Q23 22 23 22 Z" fill="#8a93c4"/>
+          <circle cx="16" cy="15.5" r="1.6" fill="#e8b39c"/>
+          <path d="M13.5 22 Q13.5 19 18.5 19 Q18.5 22 18.5 22 Z" fill="#e8b39c"/>
+        </svg>
+      </span>
+      <span class="logo-word logo-word-lg">Kidd<span class="i-coral">&#305;</span>o</span>
+    </span>
+  </a>
+  <nav class="nav-links">
+    <a href="#mission">Mission</a>
+    <a href="#features">Features</a>
+    <a href="#how">How it works</a>
+    <a href="#reviews">Reviews</a>
+    <a href="#faq">FAQ</a>
+  </nav>
+  <a href="#cta" class="nav-cta">
+    Get started
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  </a>
+</header>
+
+<!-- Hero -->
+<section class="hero">
+  <h1 class="display">
+    The family agent<br/>
+    <span class="display-accent">that just <em>gets it.</em></span>
+  </h1>
+  <p class="hero-sub">
+    One friendly AI that texts with parents and kids. It tracks grades, schedules, screen time, well‑being — and answers in seconds, in plain English.
+  </p>
+  <div class="hero-ctas">
+    <a href="#cta" class="btn btn-primary">
+      Start your free month
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </a>
+    <a href="#how" class="btn btn-ghost">
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+      Watch the demo
+    </a>
+  </div>
+
+  <!-- Phone -->
+  <div class="phone-stage">
+
+    <!-- School scene -->
+    <div class="scene" aria-hidden="true">
+      <svg viewBox="0 0 1000 380" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <style>
+            .ink-line { stroke: #161313; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+            .coral-fill { fill: #e8624a; }
+            .bus-yellow { fill: #f0b948; }
+            .cream-fill { fill: #fff8ee; }
+            .leaf-fill { fill: #93a87d; }
+            .wheel-fill { fill: #1a1717; }
+            .soft-fill { fill: #efe9e2; }
+          </style>
+        </defs>
+
+        <!-- Sun -->
+        <circle cx="90" cy="70" r="34" class="coral-fill" opacity="0.9"/>
+        <g stroke="#e8624a" stroke-width="2" stroke-linecap="round">
+          <line x1="90" y1="18" x2="90" y2="8"/>
+          <line x1="40" y1="70" x2="28" y2="70"/>
+          <line x1="55" y1="35" x2="46" y2="26"/>
+          <line x1="55" y1="105" x2="46" y2="114"/>
+          <line x1="125" y1="35" x2="134" y2="26"/>
+        </g>
+
+        <!-- Clouds (line only) -->
+        <path d="M210 60 q12 -22 34 -16 q10 -16 30 -10 q16 -8 28 6 q14 -2 16 14 q-2 12 -16 12 l-78 0 q-22 -1 -14 -6 z"
+              class="ink-line" stroke-width="1.6"/>
+        <path d="M750 50 q10 -18 28 -14 q8 -14 26 -8 q14 -6 22 6 q12 0 12 12 q-2 10 -14 10 l-62 0 q-18 -1 -12 -6 z"
+              class="ink-line" stroke-width="1.6"/>
+
+        <!-- Back hills (line only, no fill so it blends with the page) -->
+        <path d="M140 270 q140 -60 280 -10 q140 50 280 -10 q140 -60 220 -10"
+              class="ink-line" stroke-width="1.6"/>
+
+        <!-- Ground line (subtle, shorter so it doesn't reach the edges) -->
+        <line x1="120" y1="300" x2="880" y2="300" stroke="#161313" stroke-width="1.6" stroke-linecap="round" opacity="0.55"/>
+
+        <!-- ===== School building (left) ===== -->
+        <g transform="translate(80 130)">
+          <!-- main body -->
+          <rect x="0" y="60" width="180" height="110" class="cream-fill" stroke="#161313" stroke-width="2"/>
+          <!-- roof -->
+          <polygon points="-12,60 192,60 90,10" class="cream-fill" stroke="#161313" stroke-width="2" stroke-linejoin="round"/>
+          <!-- bell tower -->
+          <rect x="70" y="-10" width="40" height="32" class="cream-fill" stroke="#161313" stroke-width="2"/>
+          <polygon points="64,-10 116,-10 90,-32" class="coral-fill" stroke="#161313" stroke-width="2" stroke-linejoin="round"/>
+          <circle cx="90" cy="6" r="6" fill="#161313"/>
+          <!-- flag -->
+          <line x1="90" y1="-32" x2="90" y2="-58" class="ink-line" stroke-width="2"/>
+          <path d="M90 -58 l16 4 l-16 6 z" class="coral-fill" stroke="#161313" stroke-width="1.5" stroke-linejoin="round"/>
+          <!-- windows -->
+          <rect x="18" y="80" width="30" height="34" fill="#dfe9ef" stroke="#161313" stroke-width="1.6"/>
+          <line x1="33" y1="80" x2="33" y2="114" class="ink-line" stroke-width="1.2"/>
+          <line x1="18" y1="97" x2="48" y2="97" class="ink-line" stroke-width="1.2"/>
+
+          <rect x="132" y="80" width="30" height="34" fill="#dfe9ef" stroke="#161313" stroke-width="1.6"/>
+          <line x1="147" y1="80" x2="147" y2="114" class="ink-line" stroke-width="1.2"/>
+          <line x1="132" y1="97" x2="162" y2="97" class="ink-line" stroke-width="1.2"/>
+
+          <!-- door -->
+          <rect x="74" y="120" width="32" height="50" fill="#3a2b22" stroke="#161313" stroke-width="1.8"/>
+          <circle cx="100" cy="146" r="1.6" fill="#f0b948"/>
+          <!-- steps -->
+          <line x1="66" y1="170" x2="114" y2="170" class="ink-line" stroke-width="2"/>
+          <!-- sign -->
+          <rect x="58" y="44" width="64" height="14" rx="2" fill="#161313"/>
+          <text x="90" y="55" font-family="Inter, sans-serif" font-size="9" font-weight="700"
+                fill="#fff8ee" text-anchor="middle" letter-spacing="0.08em">SCHOOL</text>
+        </g>
+
+        <!-- Tree between school and bus -->
+        <g transform="translate(310 200)">
+          <line x1="0" y1="20" x2="0" y2="100" class="ink-line" stroke-width="3"/>
+          <circle cx="0" cy="0" r="32" class="leaf-fill" stroke="#161313" stroke-width="2"/>
+          <circle cx="-22" cy="14" r="22" class="leaf-fill" stroke="#161313" stroke-width="2"/>
+          <circle cx="22" cy="14" r="22" class="leaf-fill" stroke="#161313" stroke-width="2"/>
+        </g>
+
+        <!-- ===== School bus (right) ===== -->
+        <g transform="translate(680 210)">
+          <!-- bottom black stripe -->
+          <rect x="-2" y="74" width="284" height="6" fill="#161313"/>
+
+          <!-- body -->
+          <path d="M0 12 q0 -10 10 -10 l180 0 q12 0 16 8 l28 14 q26 6 36 18 q8 10 8 22 l0 16 q0 6 -6 6 l-262 0 q-10 0 -10 -10 z"
+                class="bus-yellow" stroke="#161313" stroke-width="2.2" stroke-linejoin="round"/>
+
+          <!-- side windows -->
+          <g fill="#dfe9ef" stroke="#161313" stroke-width="1.6">
+            <rect x="14" y="14" width="34" height="26" rx="3"/>
+            <rect x="56" y="14" width="34" height="26" rx="3"/>
+            <rect x="98" y="14" width="34" height="26" rx="3"/>
+            <rect x="140" y="14" width="34" height="26" rx="3"/>
+          </g>
+
+          <!-- windshield -->
+          <path d="M200 14 q0 -2 4 -2 l16 0 q8 0 12 6 l16 12 q4 4 -2 6 l-42 0 q-4 0 -4 -4 z"
+                fill="#dfe9ef" stroke="#161313" stroke-width="1.6" stroke-linejoin="round"/>
+
+          <!-- door -->
+          <rect x="180" y="42" width="14" height="32" fill="#161313"/>
+          <line x1="187" y1="42" x2="187" y2="74" stroke="#f0b948" stroke-width="1.2"/>
+
+          <!-- headlight -->
+          <circle cx="266" cy="56" r="5" fill="#fff8ee" stroke="#161313" stroke-width="1.6"/>
+
+          <!-- top blinker lights -->
+          <rect x="10" y="2" width="8" height="6" rx="1" class="coral-fill" stroke="#161313" stroke-width="1.2"/>
+          <rect x="190" y="2" width="8" height="6" rx="1" class="coral-fill" stroke="#161313" stroke-width="1.2"/>
+
+          <!-- text on side -->
+          <text x="95" y="62" font-family="Fraunces, serif" font-size="13" font-weight="700"
+                fill="#161313" text-anchor="middle" letter-spacing="0.04em">KIDDIO</text>
+
+          <!-- wheels -->
+          <g>
+            <circle cx="48" cy="86" r="16" class="wheel-fill"/>
+            <circle cx="48" cy="86" r="6" fill="#6b6566"/>
+            <circle cx="222" cy="86" r="16" class="wheel-fill"/>
+            <circle cx="222" cy="86" r="6" fill="#6b6566"/>
+          </g>
+
+          <!-- stop sign arm folded -->
+          <rect x="38" y="38" width="4" height="14" fill="#161313"/>
+          <polygon points="32,38 48,38 50,34 30,34" class="coral-fill" stroke="#161313" stroke-width="1.2"/>
+        </g>
+
+        <!-- Kid with backpack walking (right of phone, before bus) -->
+        <g transform="translate(655 256)" stroke="#161313" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none">
+          <circle cx="0" cy="0" r="9" class="cream-fill" stroke-width="2"/>
+          <!-- backpack -->
+          <rect x="-12" y="10" width="9" height="14" rx="2" class="coral-fill" stroke-width="1.6"/>
+          <!-- body -->
+          <line x1="0" y1="9" x2="0" y2="30"/>
+          <!-- legs -->
+          <line x1="0" y1="30" x2="-6" y2="44"/>
+          <line x1="0" y1="30" x2="6" y2="44"/>
+          <!-- arms -->
+          <line x1="0" y1="16" x2="-9" y2="24"/>
+          <line x1="0" y1="16" x2="9" y2="22"/>
+        </g>
+
+        <!-- tiny flowers -->
+        <g>
+          <circle cx="50" cy="320" r="3" class="coral-fill"/>
+          <circle cx="430" cy="328" r="3" fill="#d99a3a"/>
+          <circle cx="490" cy="322" r="3" class="coral-fill"/>
+          <circle cx="930" cy="318" r="3" fill="#d99a3a"/>
+          <circle cx="880" cy="324" r="3" class="coral-fill"/>
+          <line x1="50" y1="323" x2="50" y2="332" class="ink-line" stroke-width="1.2"/>
+          <line x1="430" y1="331" x2="430" y2="338" class="ink-line" stroke-width="1.2"/>
+          <line x1="490" y1="325" x2="490" y2="334" class="ink-line" stroke-width="1.2"/>
+          <line x1="930" y1="321" x2="930" y2="330" class="ink-line" stroke-width="1.2"/>
+          <line x1="880" y1="327" x2="880" y2="334" class="ink-line" stroke-width="1.2"/>
+        </g>
+
+        <!-- a couple birds -->
+        <path d="M380 100 q6 -6 12 0 q6 -6 12 0" class="ink-line" stroke-width="1.8" fill="none"/>
+        <path d="M650 80 q5 -5 10 0 q5 -5 10 0" class="ink-line" stroke-width="1.6" fill="none"/>
+      </svg>
+    </div>
+
+    <!-- Floating chips -->
+    <div class="float-chip chip-grades">
+      <div class="chip-icon" style="background:#fde68a;color:#92400e">A</div>
+      <div>
+        <div class="chip-label">Emma · Biology</div>
+        <div class="chip-value">Quiz: 96% ↑</div>
+      </div>
+    </div>
+    <div class="float-chip chip-pickup">
+      <div class="chip-icon" style="background:#bae6fd;color:#075985">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M3 13l2-6h14l2 6M5 13h14v5a1 1 0 0 1-1 1h-1a2 2 0 1 1-4 0H10a2 2 0 1 1-4 0H6a1 1 0 0 1-1-1v-5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+      </div>
+      <div>
+        <div class="chip-label">Jake · Pickup</div>
+        <div class="chip-value">Soccer · 5:00 PM</div>
+      </div>
+    </div>
+    <div class="float-chip chip-mood">
+      <div class="chip-icon" style="background:#fbcfe8;color:#9d174d">♥</div>
+      <div>
+        <div class="chip-label">Daily check‑in</div>
+        <div class="chip-value">Mood: great 🌞</div>
+      </div>
+    </div>
+    <div class="float-chip chip-screen">
+      <div class="chip-icon" style="background:#c7d2fe;color:#3730a3">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </div>
+      <div>
+        <div class="chip-label">Screen time</div>
+        <div class="chip-value">42m left today</div>
+      </div>
+    </div>
+
+    <div class="phone">
+      <div class="phone-notch"></div>
+      <div class="phone-screen">
+        <div class="status-bar">
+          <span>9:41</span>
+          <div class="status-icons">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M2 16h3v4H2zm5-3h3v7H7zm5-4h3v11h-3zm5-5h3v16h-3z"/></svg>
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M2 9l10-6 10 6-10 12L2 9z" opacity=".2"/><path d="M12 3l10 6v0a16 16 0 0 1-20 0L12 3z"/></svg>
+            <div class="battery"><span></span></div>
+          </div>
+        </div>
+        <div class="chat-header">
+          <div class="avatar">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none"><path d="M12 2l1.6 4.5L18 8l-3.5 2.8L16 16l-4-2.5L8 16l1.5-5.2L6 8l4.4-1.5L12 2z" fill="#fff"/></svg>
+          </div>
+          <div>
+            <div class="chat-name">Kiddio</div>
+            <div class="chat-status"><span class="dot"></span> Active · learning your family</div>
+          </div>
+        </div>
+        <div class="chat-body" id="chatBody">
+          <!-- messages get injected here -->
+        </div>
+        <div class="chat-input">
+          <div class="input-pill">
+            <span id="typedPrompt"></span><span class="caret">|</span>
+          </div>
+          <button class="send-btn" aria-label="Send">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M5 12l14-7-5 14-3-5-6-2z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Marquee of use-cases -->
+<div class="marquee">
+  <div class="marquee-track">
+    <span>Grades &amp; assignments</span><span aria-hidden="true">✦</span>
+    <span>Schedules &amp; pickups</span><span aria-hidden="true">✦</span>
+    <span>Permission requests</span><span aria-hidden="true">✦</span>
+    <span>Location check‑ins</span><span aria-hidden="true">✦</span>
+    <span>Daily well‑being</span><span aria-hidden="true">✦</span>
+    <span>Screen time</span><span aria-hidden="true">✦</span>
+    <span>Lunch money</span><span aria-hidden="true">✦</span>
+    <span>Carpool swaps</span><span aria-hidden="true">✦</span>
+    <span>Grades &amp; assignments</span><span aria-hidden="true">✦</span>
+    <span>Schedules &amp; pickups</span><span aria-hidden="true">✦</span>
+    <span>Permission requests</span><span aria-hidden="true">✦</span>
+    <span>Location check‑ins</span><span aria-hidden="true">✦</span>
+    <span>Daily well‑being</span><span aria-hidden="true">✦</span>
+    <span>Screen time</span><span aria-hidden="true">✦</span>
+  </div>
+</div>
+
+<!-- Integrations -->
+<section class="logo-strip">
+  <div class="container">
+    <div class="logo-strip-label">Connects with the tools your family already uses</div>
+    <div class="logo-row">
+      <span class="brand">Google Classroom</span>
+      <span class="brand">Canvas</span>
+      <span class="brand">PowerSchool</span>
+      <span class="brand">Apple Family</span>
+      <span class="brand">Google Family Link</span>
+      <span class="brand">iCloud</span>
+      <span class="brand">Outlook</span>
+      <span class="brand">ClassDojo</span>
+    </div>
+  </div>
+</section>
+
+<!-- Mission -->
+<section id="mission" class="section">
+  <div class="container mission-grid">
+    <div>
+      <div class="kicker">Our mission</div>
+      <h2 class="h2">Family logistics shouldn't take a spreadsheet.</h2>
+    </div>
+    <div class="mission-text">
+      <p>Modern families juggle five apps, three school portals, two calendars, and a group chat that nobody reads. Kiddio puts everything into one place — one number, one agent, plain text.</p>
+      <p>Built with privacy first. Kids get age‑appropriate replies. Parents stay in the loop without becoming the help desk.</p>
+    </div>
+  </div>
+</section>
+
+<!-- Features -->
+<section id="features" class="section">
+  <div class="container">
+    <div class="section-head">
+      <div class="kicker">Features</div>
+      <h2 class="h2">Everything your family needs,<br/>just a text away.</h2>
+    </div>
+    <div class="features-grid">
+      <article class="feat">
+        <div class="feat-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 5a2 2 0 0 1 2-2h6v16H6a2 2 0 0 0-2 2V5z"/>
+            <path d="M20 5a2 2 0 0 0-2-2h-6v16h6a2 2 0 0 1 2 2V5z"/>
+            <path d="M8 8h2M8 11h2M14 8h2M14 11h2"/>
+          </svg>
+        </div>
+        <h3>Grade tracker</h3>
+        <p>Plug in Canvas, PowerSchool, Schoology or Google Classroom. Ask "How's Emma doing?" — get a real answer.</p>
+        <ul class="feat-list">
+          <li>Auto‑syncs every hour</li>
+          <li>Flags drops before report cards</li>
+          <li>Weekly summary every Sunday</li>
+        </ul>
+      </article>
+      <article class="feat">
+        <div class="feat-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="5" width="18" height="16" rx="2"/>
+            <path d="M3 9h18M8 3v4M16 3v4"/>
+            <circle cx="8" cy="14" r="1" fill="currentColor"/>
+            <circle cx="12" cy="14" r="1" fill="currentColor"/>
+            <circle cx="16" cy="14" r="1" fill="currentColor"/>
+          </svg>
+        </div>
+        <h3>One family calendar</h3>
+        <p>Practice times, recitals, parent‑teacher nights, carpool slots — all unified. Conflicts surface before they happen.</p>
+        <ul class="feat-list">
+          <li>iCloud, Google, Outlook</li>
+          <li>Smart conflict detection</li>
+          <li>Auto‑reminders the night before</li>
+        </ul>
+      </article>
+      <article class="feat">
+        <div class="feat-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s7-7.5 7-13a7 7 0 1 0-14 0c0 5.5 7 13 7 13z"/>
+            <circle cx="12" cy="9" r="2.5"/>
+          </svg>
+        </div>
+        <h3>Check‑ins, not surveillance</h3>
+        <p>Kids text "home safe" — parents get a ping. Optional location share for the routes that matter.</p>
+        <ul class="feat-list">
+          <li>Geofences for school & home</li>
+          <li>Quiet hours respected</li>
+          <li>Audit log, always on</li>
+        </ul>
+      </article>
+      <article class="feat">
+        <div class="feat-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 5h13a3 3 0 0 1 3 3v5a3 3 0 0 1-3 3H10l-4 4v-4H7a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3z"/>
+            <path d="M9 11l2 2 4-4"/>
+          </svg>
+        </div>
+        <h3>Permission requests</h3>
+        <p>"Can I go to Sara's house after school?" — the agent loops in the right parent and confirms back to the kid.</p>
+        <ul class="feat-list">
+          <li>Rules learn over time</li>
+          <li>Co‑parent friendly</li>
+          <li>Built‑in approval trail</li>
+        </ul>
+      </article>
+      <article class="feat">
+        <div class="feat-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 21s-7-4.5-7-10a5 5 0 0 1 9-3 5 5 0 0 1 9 3c0 5.5-7 10-7 10"/>
+            <path d="M9 11l2 2 4-4" opacity=".5"/>
+          </svg>
+        </div>
+        <h3>Daily well‑being</h3>
+        <p>A gentle, age‑appropriate check‑in every evening. Parents see trends — not transcripts.</p>
+        <ul class="feat-list">
+          <li>Reviewed by child psychologists</li>
+          <li>Anonymous mood trends</li>
+          <li>Crisis escalation paths</li>
+        </ul>
+      </article>
+      <article class="feat">
+        <div class="feat-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="6" y="2" width="12" height="20" rx="3"/>
+            <path d="M10 18h4"/>
+            <path d="M9 7h6" opacity=".5"/>
+          </svg>
+        </div>
+        <h3>Screen time, gently</h3>
+        <p>Set limits by conversation. "No TikTok until homework's done" — and the agent enforces it.</p>
+        <ul class="feat-list">
+          <li>iOS Family & Android Family Link</li>
+          <li>Earn extra time with chores</li>
+          <li>Bedtime auto‑mode</li>
+        </ul>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- How it works -->
+<section id="how" class="section how-section">
+  <div class="container">
+    <div class="section-head">
+      <div class="kicker">How it works</div>
+      <h2 class="h2">Set up in five minutes.<br/>Pays for itself by Tuesday.</h2>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">01</div>
+        <h3>Text "hi" to your new number</h3>
+        <p>Kiddio gives you a single phone number. Parents and kids text it like any contact. No app required.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">02</div>
+        <h3>Connect what you already use</h3>
+        <p>Plug in Google Calendar, school portals, Apple Family. The agent learns your routines in about a week.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">03</div>
+        <h3>Stop being the help desk</h3>
+        <p>The agent handles the 90% — pickups, permissions, reminders, grades. You handle the moments that matter.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Reviews -->
+<section id="reviews" class="section">
+  <div class="container">
+    <div class="section-head">
+      <div class="kicker">From real families</div>
+      <h2 class="h2">"Honestly, it's the<br/>third parent we needed."</h2>
+    </div>
+    <div class="reviews-grid">
+      <article class="review r1">
+        <div class="stars">★★★★★</div>
+        <p>"I stopped being the only one who knew when soccer practice was. Game changer."</p>
+        <div class="reviewer">
+          <div class="r-avatar" style="background:linear-gradient(135deg,#fcd34d,#fb923c)">M</div>
+          <div>
+            <div class="r-name">Maya R.</div>
+            <div class="r-meta">2 kids · Austin, TX</div>
+          </div>
+        </div>
+      </article>
+      <article class="review r2">
+        <div class="stars">★★★★★</div>
+        <p>"My 13‑year‑old actually replies to Kiddio. He never replied to me. I'm not even mad."</p>
+        <div class="reviewer">
+          <div class="r-avatar" style="background:linear-gradient(135deg,#a78bfa,#f472b6)">D</div>
+          <div>
+            <div class="r-name">Devon K.</div>
+            <div class="r-meta">3 kids · Portland, OR</div>
+          </div>
+        </div>
+      </article>
+      <article class="review r3">
+        <div class="stars">★★★★★</div>
+        <p>"We're divorced co‑parents. This is the first tool that doesn't pick sides — just gets the kids where they need to be."</p>
+        <div class="reviewer">
+          <div class="r-avatar" style="background:linear-gradient(135deg,#67e8f9,#818cf8)">S</div>
+          <div>
+            <div class="r-name">Sarah & Tom</div>
+            <div class="r-meta">co‑parenting · Brooklyn, NY</div>
+          </div>
+        </div>
+      </article>
+      <article class="review r4">
+        <div class="stars">★★★★★</div>
+        <p>"It caught a missing assignment a week before report cards. Saved my daughter a B+."</p>
+        <div class="reviewer">
+          <div class="r-avatar" style="background:linear-gradient(135deg,#86efac,#22d3ee)">A</div>
+          <div>
+            <div class="r-name">Aaron M.</div>
+            <div class="r-meta">1 kid · Denver, CO</div>
+          </div>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- Use cases / mini phones -->
+<section class="section usecases">
+  <div class="container">
+    <div class="section-head">
+      <div class="kicker">A day in the life</div>
+      <h2 class="h2">Five conversations.<br/>Zero panic.</h2>
+    </div>
+    <div class="mini-grid">
+      <div class="mini-phone">
+        <div class="mini-tag">7:02 AM</div>
+        <div class="mini-bubble parent">"What's on Jake's calendar today?"</div>
+        <div class="mini-bubble agent">Math test 2nd period, soccer at 4. Lunch packed? 🥪</div>
+      </div>
+      <div class="mini-phone">
+        <div class="mini-tag">11:18 AM</div>
+        <div class="mini-bubble kid">"can i stay at sara's till 7?"</div>
+        <div class="mini-bubble agent">Checking with mom… ✅ Yes — home by 7:15 latest.</div>
+      </div>
+      <div class="mini-phone">
+        <div class="mini-tag">3:44 PM</div>
+        <div class="mini-bubble parent">"How's Emma doing in bio?"</div>
+        <div class="mini-bubble agent">96% on today's quiz! She's averaging 92 this quarter.</div>
+      </div>
+      <div class="mini-phone">
+        <div class="mini-tag">6:30 PM</div>
+        <div class="mini-bubble agent">Quick check‑in, Jake — how was your day, 1 to 5?</div>
+        <div class="mini-bubble kid">4. math test was hard tho</div>
+      </div>
+      <div class="mini-phone">
+        <div class="mini-tag">8:55 PM</div>
+        <div class="mini-bubble parent">"Did everyone finish homework?"</div>
+        <div class="mini-bubble agent">Emma ✅ done. Jake has 1 worksheet left, 15 min.</div>
+      </div>
+      <div class="mini-phone">
+        <div class="mini-tag">9:40 PM</div>
+        <div class="mini-bubble agent">Reminder: permission slip for Friday's field trip due tomorrow. Want me to fill it in? 📝</div>
+        <div class="mini-bubble parent">"yes please"</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Pricing / CTA -->
+<section id="cta" class="section cta-section">
+  <div class="container cta-card">
+    <div>
+      <div class="kicker light">Plans</div>
+      <h2 class="h2">One price.<br/>Your whole family.</h2>
+      <p class="cta-sub">$19/month. Unlimited kids, unlimited messages, all integrations. First month free, cancel any time.</p>
+      <div class="hero-ctas">
+        <a href="#" class="btn btn-primary">Start your free month →</a>
+        <a href="#" class="btn btn-ghost light">Talk to a human</a>
+      </div>
+      <div class="trust">
+        <span>🔒 SOC 2 Type II</span>
+        <span>👶 COPPA compliant</span>
+        <span>🇺🇸 Data stays in‑country</span>
+      </div>
+    </div>
+    <div class="cta-art">
+      <div class="cta-bubble cb1">"home safe ❤"</div>
+      <div class="cta-bubble cb2">Got it — telling Dad now.</div>
+      <div class="cta-bubble cb3">"can ben sleep over fri?"</div>
+      <div class="cta-bubble cb4">Yes — checked the calendar, you're free 🎉</div>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section id="faq" class="section">
+  <div class="container">
+    <div class="section-head">
+      <div class="kicker">FAQ</div>
+      <h2 class="h2">Answers, before you ask.</h2>
+    </div>
+    <div class="faq-list">
+      <details>
+        <summary>Is my family's data really private?</summary>
+        <p>Yes. We use end‑to‑end encryption for all messages, never sell data, and never train models on your family's conversations. You can export or delete everything at any time.</p>
+      </details>
+      <details>
+        <summary>What ages is this appropriate for?</summary>
+        <p>The agent adapts its tone for ages 8 and up. For kids under 8, parents see a transcript by default and the agent uses simpler language. Teen mode unlocks more privacy at age 13 — with parental controls intact.</p>
+      </details>
+      <details>
+        <summary>Do my kids need a smartphone?</summary>
+        <p>No. Kiddio works over plain SMS, iMessage, WhatsApp, and our optional app. If they can text, they can use it — including kids on smartwatches.</p>
+      </details>
+      <details>
+        <summary>How does it handle co‑parents?</summary>
+        <p>You can add up to four parent‑level accounts with custom permission rules. The agent knows whose week it is and routes requests accordingly — never picking sides.</p>
+      </details>
+      <details>
+        <summary>What if the AI gets something wrong?</summary>
+        <p>Every action is logged and reversible for 30 days. For anything irreversible (signing forms, making purchases), the agent confirms with a parent first.</p>
+      </details>
+      <details>
+        <summary>What schools and apps do you integrate with?</summary>
+        <p>Canvas, PowerSchool, Schoology, Google Classroom, ClassDojo, Apple Family, Google Family Link, iCloud Calendar, Google Calendar, Outlook, Life360, and 30+ more. We add new integrations every month — just ask.</p>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer class="footer">
+  <div class="container footer-grid">
+    <div>
+      <a href="#" class="logo">
+        <span class="logo-mark">
+          <svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
+            <path d="M16 3 L27 11 V22 Q27 24 25 24 H11 L7 28 V11 Z"
+                  stroke="#e8624a" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+            <circle cx="11.5" cy="14" r="1.8" fill="#93a87d"/>
+            <path d="M9 22 Q9 18.5 14 18.5 Q14 22 14 22 Z" fill="#93a87d"/>
+            <circle cx="20.5" cy="14" r="1.8" fill="#8a93c4"/>
+            <path d="M18 22 Q18 18.5 23 18.5 Q23 22 23 22 Z" fill="#8a93c4"/>
+            <circle cx="16" cy="15.5" r="1.6" fill="#e8b39c"/>
+            <path d="M13.5 22 Q13.5 19 18.5 19 Q18.5 22 18.5 22 Z" fill="#e8b39c"/>
+          </svg>
+        </span>
+        <span class="logo-word">Kidd<span class="i-coral">&#305;</span>o</span>
+      </a>
+      <p class="foot-tag">One agent, one number, one calmer house.</p>
+    </div>
+    <div>
+      <div class="foot-head">Product</div>
+      <a href="#features">Features</a>
+      <a href="#how">How it works</a>
+      <a href="#cta">Pricing</a>
+      <a href="#faq">FAQ</a>
+    </div>
+    <div>
+      <div class="foot-head">Company</div>
+      <a href="#">About</a>
+      <a href="#">Careers</a>
+      <a href="#">Press</a>
+      <a href="#">Contact</a>
+    </div>
+    <div>
+      <div class="foot-head">Trust</div>
+      <a href="#">Privacy</a>
+      <a href="#">Security</a>
+      <a href="#">For kids</a>
+      <a href="#">For schools</a>
+    </div>
+  </div>
+  <div class="foot-fine">
+    <span>© 2026 Kiddio, Inc.</span>
+    <span>Made with ☕ and ❤️ in Brooklyn.</span>
+  </div>
+</footer>
+
+<script src="script.js"></script>
+</body>
+</html>
