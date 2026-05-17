@@ -1,8 +1,7 @@
+import asyncio
 import hashlib
 import hmac
 import logging
-import time
-from datetime import datetime, timezone
 
 import httpx
 
@@ -16,45 +15,29 @@ from config import (
 
 log = logging.getLogger(__name__)
 
+SEND_BACKOFF_SECONDS = (1.0, 3.0, 7.0, 15.0)
 
-def verify_signature(
-    raw_body: bytes, timestamp_header: str, signature_header: str
-) -> bool:
+
+def verify_signature(raw_body: bytes, signature_header: str) -> bool:
     """Verify AgentPhone webhook HMAC-SHA256 signature.
 
-    Skipped (returns True) if no webhook secret is configured — useful in dev.
+    Per AgentPhone docs the signed string is the raw body bytes — no timestamp
+    concatenation. Skipped (returns True) if no webhook secret is configured.
     """
     if not AGENT_PHONE_WEBHOOK_SECRET:
         return True
-
-    if not timestamp_header or not signature_header:
+    if not signature_header:
         return False
-
-    # Timestamp may arrive as either unix-epoch seconds or ISO-8601.
-    ts_seconds: float | None = None
-    try:
-        ts_seconds = float(timestamp_header)
-    except ValueError:
-        try:
-            dt = datetime.fromisoformat(timestamp_header.replace("Z", "+00:00"))
-            ts_seconds = dt.replace(tzinfo=dt.tzinfo or timezone.utc).timestamp()
-        except ValueError:
-            return False
-
-    if abs(time.time() - ts_seconds) > 300:
-        return False
-
-    signed = f"{timestamp_header}.{raw_body.decode('utf-8', errors='replace')}"
     expected = "sha256=" + hmac.new(
         AGENT_PHONE_WEBHOOK_SECRET.encode(),
-        signed.encode(),
+        raw_body,
         hashlib.sha256,
     ).hexdigest()
     return hmac.compare_digest(expected, signature_header)
 
 
 async def send_message(to_number: str, body: str) -> dict:
-    """Send an SMS/iMessage via AgentPhone."""
+    """Send an SMS/iMessage via AgentPhone, retrying on transient 5xx / timeouts."""
     if not AGENT_PHONE_API_KEY or not AGENT_PHONE_AGENT_ID:
         raise RuntimeError(
             "AGENT_PHONE_API_KEY and AGENT_PHONE_AGENT_ID must be set"
@@ -68,13 +51,40 @@ async def send_message(to_number: str, body: str) -> dict:
     if AGENT_PHONE_NUMBER_ID:
         payload["number_id"] = AGENT_PHONE_NUMBER_ID
 
-    async with httpx.AsyncClient(timeout=15) as client:
-        r = await client.post(
-            f"{AGENT_PHONE_BASE_URL}/v1/messages",
-            headers={"Authorization": f"Bearer {AGENT_PHONE_API_KEY}"},
-            json=payload,
-        )
-        if r.status_code >= 400:
-            log.error("AgentPhone send_message failed: %s %s", r.status_code, r.text)
+    last_error: Exception | None = None
+    for attempt, backoff in enumerate([0.0, *SEND_BACKOFF_SECONDS]):
+        if backoff:
+            log.warning(
+                "send_message retry %d in %.1fs (last error: %s)",
+                attempt,
+                backoff,
+                last_error,
+            )
+            await asyncio.sleep(backoff)
+        try:
+            async with httpx.AsyncClient(timeout=20) as client:
+                r = await client.post(
+                    f"{AGENT_PHONE_BASE_URL}/v1/messages",
+                    headers={"Authorization": f"Bearer {AGENT_PHONE_API_KEY}"},
+                    json=payload,
+                )
+        except (httpx.TimeoutException, httpx.TransportError) as e:
+            last_error = e
+            continue
+
+        if r.status_code < 400:
+            return r.json()
+
+        # 4xx → don't retry, the request is broken
+        if 400 <= r.status_code < 500:
+            log.error("send_message client error %d: %s", r.status_code, r.text[:300])
             r.raise_for_status()
-        return r.json()
+
+        # 5xx → retry
+        last_error = httpx.HTTPStatusError(
+            f"{r.status_code} server error", request=r.request, response=r
+        )
+        log.warning("send_message server error %d (will retry)", r.status_code)
+
+    log.error("send_message exhausted retries: %s", last_error)
+    raise last_error if last_error else RuntimeError("send_message failed without an error")
