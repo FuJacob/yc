@@ -88,3 +88,26 @@ async def send_message(to_number: str, body: str) -> dict:
 
     log.error("send_message exhausted retries: %s", last_error)
     raise last_error if last_error else RuntimeError("send_message failed without an error")
+
+
+async def end_call(call_id: str, reason: str = "") -> None:
+    """Hang up an in-progress voice call.
+
+    Best-effort: errors are logged and swallowed because the voice model has
+    already told the caller goodbye by the time this fires — no point
+    surfacing the failure.
+    """
+    if not AGENT_PHONE_API_KEY:
+        log.warning("end_call skipped: AGENT_PHONE_API_KEY not set")
+        return
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.post(
+                f"{AGENT_PHONE_BASE_URL}/v1/calls/{call_id}/end",
+                headers={"Authorization": f"Bearer {AGENT_PHONE_API_KEY}"},
+                json={"reason": reason} if reason else {},
+            )
+        if r.status_code >= 400:
+            log.warning("end_call returned %d: %s", r.status_code, r.text[:200])
+    except Exception:
+        log.exception("end_call failed for call_id=%s", call_id)
