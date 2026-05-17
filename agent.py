@@ -7,6 +7,7 @@ from openai import AsyncOpenAI
 from agentphone_client import send_message
 from config import MAX_TOOL_CALLS, OPENAI_API_KEY, ORCHESTRATOR_MODEL
 from db import get_kid_for_parent, get_parent_for_kid, get_user_by_phone
+import memory
 from tools import TOOL_SCHEMAS, dispatch_tool
 
 log = logging.getLogger(__name__)
@@ -16,22 +17,29 @@ _client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
 SYSTEM_PROMPT = """You are FamilyOps, an AI assistant reachable by iMessage/SMS.
 
-You help families with school logistics. Today you support three things:
+You help families with school logistics. Today you support:
 1. Onboarding a new family — a parent sends their name, their kid's name, and their kid's phone number.
 2. Verifying a kid — the kid replies YES (or similar) to the verification text.
 3. Checking the kid's grades on the school portal (Waterloo D2L).
+4. Remembering family facts across conversations (school, courses, tutors, preferences).
 
 DECISION RULES:
 - If CONTEXT says the sender is UNKNOWN: they're a new parent. If their message contains a name + a kid's name + a phone number, call register_family. If anything is missing, ask one short follow-up question.
 - If CONTEXT says the sender is a kid with state=pending_verification and they reply YES / yeah / yep / sure / ok / confirm / etc, call confirm_kid with their own phone number.
 - If CONTEXT says the sender is a VERIFIED parent and they're asking about grades / assignments / school performance, call check_d2l_grades with their kid's name.
 - If CONTEXT says the sender is a kid with state=verified and they text anything other than YES, reply exactly: "Only your parent uses me right now."
+- If the user shares a durable fact about their kid or themselves ("remember Gabe is in 2A CS", "his tutor is on Tuesdays", "I prefer terse replies"), call remember_fact with the content + a sensible category (school_info / preference / relationship / approval).
+- If the user asks about something you might have heard before ("what's Gabe's tutor schedule", "anything you remember about him"), call recall with a short query string.
 - Always normalize phone numbers passed to tools — the tools handle messy formats, but include the digits.
+
+CONTEXT NOTES:
+- The CONTEXT block in your system messages is the CURRENT TRUTH for who's registered/verified.
+- RELEVANT MEMORIES (when present) are HISTORICAL FACTS. They may be days old. Trust CONTEXT for current state.
 
 STYLE:
 - Replies go via iMessage/SMS. Keep them short and friendly. No markdown, no emojis unless natural.
 - Do NOT add disclaimers or warnings.
-- When you call a tool that does work (especially check_d2l_grades), include a brief "checking now…" text in your message content so the user sees activity while the tool runs.
+- When you call a tool that does real work (especially check_d2l_grades), include a brief "checking now…" text in your message content so the user sees activity while the tool runs.
 """
 
 
@@ -43,13 +51,30 @@ async def handle_inbound(
 ) -> tuple[Optional[str], dict]:
     """Run the orchestrator loop. Returns (final reply text, side-effect ctx)."""
 
-    ctx: dict = {"notify_kid_about_grades": False}
-    context_str = _build_context(sender_phone)
+    user = get_user_by_phone(sender_phone)
+    family_id = user["family_id"] if user else None
+    ctx: dict = {
+        "notify_kid_about_grades": False,
+        "family_id": family_id,
+    }
 
-    messages: list[dict] = [
+    # Fire recall + build the DB context block. Both run in parallel —
+    # memory.recall has its own timeout + always returns [] on error.
+    import asyncio
+    context_str, memories = await asyncio.gather(
+        asyncio.to_thread(_build_context, sender_phone),
+        memory.recall(family_id, message_text),
+    )
+
+    system_blocks = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "system", "content": f"CONTEXT:\n{context_str}"},
     ]
+    memories_block = memory.format_memories_block(memories)
+    if memories_block:
+        system_blocks.append({"role": "system", "content": memories_block})
+
+    messages: list[dict] = system_blocks
 
     for h in recent_history or []:
         role = "assistant" if h.get("direction") == "outbound" else "user"

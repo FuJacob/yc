@@ -32,6 +32,10 @@ ORCHESTRATOR_MODEL = _env(
 # Browser Use
 BROWSER_USE_API_KEY = _env("BROWSER_USE_API_KEY")
 
+# Supermemory (semantic family memory — see rfc-7.md)
+SUPERMEMORY_API_KEY = _env("SUPERMEMORY_API_KEY")
+SUPERMEMORY_BASE_URL = "https://api.supermemory.ai"
+
 # Paths
 PROJECT_ROOT = Path(__file__).parent.resolve()
 CHROME_PROFILE_DIR = PROJECT_ROOT / "chrome-profile"
@@ -41,5 +45,7 @@ DB_PATH = PROJECT_ROOT / "familyops.db"
 D2L_URL = "https://learn.uwaterloo.ca/d2l/"
 
 # Limits
-MAX_TOOL_CALLS = 4
+MAX_TOOL_CALLS = 6  # bumped from 4 in rfc-7 — now 5 LLM tools (incl. remember_fact, recall)
 BROWSER_TIMEOUT_SECONDS = 90
+MEMORY_RECALL_LIMIT = 3
+MEMORY_TIMEOUT_SECONDS = 5

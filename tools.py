@@ -9,6 +9,7 @@ from db import (
     get_user_by_phone,
     set_onboarding_state,
 )
+import memory
 
 log = logging.getLogger(__name__)
 
@@ -88,6 +89,61 @@ TOOL_SCHEMAS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "remember_fact",
+            "description": (
+                "Store a durable fact about this family for future conversations. "
+                "Use when the user shares info worth remembering: school/program, "
+                "current courses, tutors, recurring schedules, preferences, etc. "
+                "Do NOT use for ephemeral things ('I'm tired today')."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "content": {
+                        "type": "string",
+                        "description": "The fact to remember, written as a complete sentence.",
+                    },
+                    "category": {
+                        "type": "string",
+                        "enum": ["school_info", "preference", "relationship", "approval", "other"],
+                        "description": "What kind of fact this is.",
+                    },
+                    "kid_name": {
+                        "type": "string",
+                        "description": "Name of the kid this fact is about, if any. Omit if the fact is about the parent or family as a whole.",
+                    },
+                },
+                "required": ["content", "category"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "recall",
+            "description": (
+                "Search memories for past facts about this family. Use when the user "
+                "asks about something you might have heard before ('what's his tutor "
+                "schedule?', 'anything you remember about Gabe?'). Returns a list of "
+                "matching memories or an empty result."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Short natural-language description of what to look up.",
+                    }
+                },
+                "required": ["query"],
+                "additionalProperties": False,
+            },
+        },
+    },
 ]
 
 
@@ -103,6 +159,7 @@ async def dispatch_tool(
             parent_name=str(args.get("parent_name", "")).strip(),
             kid_name=str(args.get("kid_name", "")).strip(),
             kid_phone=normalize_phone(str(args.get("kid_phone", ""))),
+            ctx=ctx,
         )
 
     if name == "confirm_kid":
@@ -111,17 +168,56 @@ async def dispatch_tool(
         )
 
     if name == "check_d2l_grades":
-        result = await check_d2l_grades(str(args.get("student_name", "")).strip())
+        student_name = str(args.get("student_name", "")).strip()
+        result = await check_d2l_grades(student_name)
         # Signal to the orchestrator that we should notify the kid AFTER the
         # parent's reply has been sent.
         ctx["notify_kid_about_grades"] = True
+        # Fire-and-forget grade snapshot to memory (no-op if Supermemory disabled).
+        family_id = ctx.get("family_id")
+        if family_id is not None:
+            memory.fire_and_forget(
+                memory.snapshot_grades(family_id, student_name, result)
+            )
         return result
+
+    if name == "remember_fact":
+        content = str(args.get("content", "")).strip()
+        category = str(args.get("category", "other")).strip() or "other"
+        kid_name = str(args.get("kid_name", "")).strip() or None
+        family_id = ctx.get("family_id")
+        if family_id is None:
+            return "ERROR: cannot remember — sender has no family registered yet."
+        if not content:
+            return "ERROR: content is empty."
+        md: dict = {"category": category, "source": "user_message"}
+        if kid_name:
+            md["kid_name"] = kid_name
+        ok = await memory.remember(family_id, content, md)
+        return "stored" if ok else "memory currently unavailable (continuing without)"
+
+    if name == "recall":
+        query = str(args.get("query", "")).strip()
+        family_id = ctx.get("family_id")
+        if family_id is None:
+            return "no memories — sender has no family yet."
+        if not query:
+            return "ERROR: query is empty."
+        results = await memory.recall(family_id, query)
+        if not results:
+            return "no relevant memories found."
+        return memory.format_memories_block(results) or "no relevant memories found."
 
     return f"ERROR: unknown tool '{name}'"
 
 
 async def _register_family(
-    *, sender_phone: str, parent_name: str, kid_name: str, kid_phone: str
+    *,
+    sender_phone: str,
+    parent_name: str,
+    kid_name: str,
+    kid_phone: str,
+    ctx: dict,
 ) -> str:
     if not parent_name or not kid_name or not kid_phone:
         return "ERROR: missing parent_name, kid_name, or kid_phone."
@@ -142,6 +238,20 @@ async def _register_family(
         parent_phone=sender_phone,
         kid_name=kid_name,
         kid_phone=kid_phone,
+    )
+
+    # Make memory tools work for subsequent tool calls in the same message.
+    ctx["family_id"] = family_id
+
+    # Seed an initial family memory (no-op if Supermemory disabled).
+    from datetime import datetime, timezone
+    memory.fire_and_forget(
+        memory.remember(
+            family_id,
+            f"Family registered on {datetime.now(timezone.utc).date().isoformat()}: "
+            f"parent={parent_name}, kid={kid_name}.",
+            {"category": "school_info", "kid_name": kid_name, "source": "registration"},
+        )
     )
 
     try:
