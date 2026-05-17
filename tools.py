@@ -603,15 +603,22 @@ VOICE_TOOL_SCHEMAS = [
         "function": {
             "name": "wait_for_kid_confirmation",
             "description": (
-                "Block for up to timeout_seconds while the kid replies YES via SMS. "
-                "Use right after register_family. Returns {confirmed: true, kid_name} "
-                "if they replied, {confirmed: false} on timeout."
+                "Block for up to timeout_seconds (default 12, max 20) while the kid "
+                "replies YES via SMS. Returns {confirmed: true, kid_name} on success "
+                "or {confirmed: false} on timeout. ON TIMEOUT: say something brief "
+                "like 'still waiting on Alex' and CALL THIS TOOL AGAIN to keep "
+                "polling. Do not give up after one timeout — kids sometimes take "
+                "30-60 seconds to read and reply."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "kid_phone": {"type": "string"},
-                    "timeout_seconds": {"type": "integer", "default": 45},
+                    "timeout_seconds": {
+                        "type": "integer",
+                        "default": 12,
+                        "description": "Per-call wait in seconds. Hard-capped at 20.",
+                    },
                 },
                 "required": ["kid_phone"],
                 "additionalProperties": False,
@@ -717,10 +724,20 @@ def _voice_caller_context(from_number: str) -> str:
     return "Verified caller: " + ", ".join(parts)
 
 
+_WAIT_FOR_KID_HARD_CAP_SECONDS = 20
+
+
 async def _voice_wait_for_kid_confirmation(kid_phone: str, timeout_seconds: int) -> dict:
-    """Poll the DB until the kid's onboarding flips to verified, or timeout."""
+    """Poll the DB until the kid's onboarding flips to verified, or timeout.
+
+    Capped at 20s regardless of caller-supplied timeout — anything longer would
+    exceed AgentPhone's webhook timeout and AgentPhone would drop the tool
+    response. The voice model is prompted to re-invoke this tool on a False
+    return to keep polling.
+    """
     kid_phone = normalize_phone(kid_phone)
-    deadline = asyncio.get_event_loop().time() + max(1, timeout_seconds)
+    timeout_seconds = min(max(1, timeout_seconds), _WAIT_FOR_KID_HARD_CAP_SECONDS)
+    deadline = asyncio.get_event_loop().time() + timeout_seconds
     while asyncio.get_event_loop().time() < deadline:
         kid = get_user_by_phone(kid_phone)
         if kid and kid["onboarding_state"] == "verified":

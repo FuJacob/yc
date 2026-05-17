@@ -7,6 +7,7 @@ funds always land at the kid's stored destination.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from decimal import Decimal
 from typing import Any
@@ -277,7 +278,10 @@ async def execute_approved_payment(
         return f"Approved, but payment could not run: {reason}"
 
     try:
-        result = send_funds(
+        # Sponge SDK is sync — run in a thread so we don't block the event loop
+        # (which would stall every other webhook for the duration of the transfer).
+        result = await asyncio.to_thread(
+            send_funds,
             to=destination,
             amount_cents=row["amount_cents"],
             currency=row["currency"],

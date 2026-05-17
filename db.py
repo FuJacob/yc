@@ -182,11 +182,36 @@ def set_onboarding_state(user_id: int, state: str) -> None:
 
 
 def delete_family(family_id: int) -> int:
-    """Delete a family and all its users. Returns rows deleted (users + 1 family)."""
+    """Delete a family and every row that references it. Returns total rows deleted.
+
+    Cascades manually because SQLite doesn't enforce REFERENCES by default
+    (we never set PRAGMA foreign_keys=ON). Order matters: events reference
+    payment_requests, which reference families and users.
+    """
     with connect() as conn:
-        c1 = conn.execute("DELETE FROM users WHERE family_id = ?", (family_id,))
-        c2 = conn.execute("DELETE FROM families WHERE id = ?", (family_id,))
-        return c1.rowcount + c2.rowcount
+        req_ids = [
+            r[0] for r in conn.execute(
+                "SELECT id FROM payment_requests WHERE family_id = ?",
+                (family_id,),
+            ).fetchall()
+        ]
+        c_events = 0
+        if req_ids:
+            placeholders = ",".join("?" * len(req_ids))
+            c_events = conn.execute(
+                f"DELETE FROM payment_events WHERE payment_request_id IN ({placeholders})",
+                req_ids,
+            ).rowcount
+        c_reqs = conn.execute(
+            "DELETE FROM payment_requests WHERE family_id = ?", (family_id,)
+        ).rowcount
+        c_users = conn.execute(
+            "DELETE FROM users WHERE family_id = ?", (family_id,)
+        ).rowcount
+        c_family = conn.execute(
+            "DELETE FROM families WHERE id = ?", (family_id,)
+        ).rowcount
+        return c_events + c_reqs + c_users + c_family
 
 
 def set_payout_destination(user_id: int, destination: str) -> None:

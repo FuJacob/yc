@@ -67,7 +67,12 @@ def summarize_step(raw_step: str) -> Optional[str]:
     grade_match = _GRADE_RE.search(text)
     if course_match and grade_match:
         course = _spell_course(course_match.group(1) + course_match.group(2))
-        grade = grade_match.group(1).rstrip(".0") or grade_match.group(1)
+        grade = grade_match.group(1)
+        # Strip trailing zeros from the fractional part only — never from an
+        # integer like "100" or "80" (rstrip("0") on a no-dot string would
+        # eat real digits).
+        if "." in grade:
+            grade = grade.rstrip("0").rstrip(".")
         return f"{course}, {grade} percent."
 
     # Course code without a grade — "looking at CS246"
