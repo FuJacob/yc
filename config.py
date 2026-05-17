@@ -49,6 +49,7 @@ VOICE_NARRATION_INTERVAL_SECONDS = float(_env("VOICE_NARRATION_INTERVAL_SECONDS"
 # Sponge (parent's wallet — RFC-4)
 SPONGE_API_KEY = _env("SPONGE_API_KEY")
 SPONGE_API_URL = _env("SPONGE_API_URL")
+KID_DEFAULT_PAYOUT_DESTINATION = _env("KID_DEFAULT_PAYOUT_DESTINATION")
 
 # Payment policy
 PAYMENT_REQUEST_TTL_MINUTES = int(_env("PAYMENT_REQUEST_TTL_MINUTES", default="30"))
@@ -61,6 +62,8 @@ DB_PATH = PROJECT_ROOT / "familyops.db"
 
 # D2L
 D2L_URL = "https://learn.uwaterloo.ca/d2l/home/1255792"
+D2L_USERNAME = _env("D2L_USERNAME", default="j224fu@uwaterloo.ca")
+D2L_PASSWORD = _env("D2L_PASSWORD", default="")
 
 # Limits
 MAX_TOOL_CALLS = 6  # bumped from 4 in rfc-7 — now 5 LLM tools (incl. remember_fact, recall)

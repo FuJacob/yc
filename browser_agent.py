@@ -5,16 +5,25 @@ from typing import Any, Callable, Optional
 
 from browser_use_sdk import AsyncBrowserUse
 
-from config import BROWSER_TIMEOUT_SECONDS, BROWSER_USE_API_KEY, BROWSER_USE_PROFILE_ID, D2L_URL
+from config import (
+    BROWSER_TIMEOUT_SECONDS,
+    BROWSER_USE_API_KEY,
+    BROWSER_USE_PROFILE_ID,
+    D2L_PASSWORD,
+    D2L_URL,
+    D2L_USERNAME,
+)
 
 log = logging.getLogger(__name__)
 
 client = AsyncBrowserUse(api_key=BROWSER_USE_API_KEY)
 
 D2L_TASK_TEMPLATE = (
-    "You are already logged into the University of Waterloo's D2L (Brightspace) "
-    "learning portal as {student_name}. "
-    "Navigate to {d2l_url}. From the homepage, find and open the Grades section. "
+    "Navigate to {d2l_url}. "
+    "If you see a login page or are redirected to a Microsoft/ADFS sign-in page, "
+    "log in with email '{username}' and password '{password}'. "
+    "If prompted for 'Stay signed in?' click Yes. "
+    "Once logged in, find and open the Grades section for {student_name}. "
     "Some D2L deployments require selecting a specific course first; if so, "
     "visit each current-term course and read the Grades page for each. "
     "Extract every course code with its current overall grade or percentage. "
@@ -42,7 +51,12 @@ async def create_d2l_session(student_name: str) -> tuple[str, str, str, Any]:
     log.info("Cloud session %s created, live_url=%s", session_id, live_url)
 
     # 2. Create a task on that session
-    task_text = D2L_TASK_TEMPLATE.format(student_name=student_name, d2l_url=D2L_URL)
+    task_text = D2L_TASK_TEMPLATE.format(
+        student_name=student_name,
+        d2l_url=D2L_URL,
+        username=D2L_USERNAME,
+        password=D2L_PASSWORD,
+    )
     task_response = await client.tasks.create_task(
         task=task_text,
         session_id=session_id,

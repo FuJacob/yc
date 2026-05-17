@@ -10,6 +10,7 @@ from agentphone_client import send_message
 from browser_agent import check_d2l_grades, create_d2l_session, stream_until_done
 from config import (
     BROWSER_USE_FETCH_TIMEOUT_SECONDS,
+    KID_DEFAULT_PAYOUT_DESTINATION,
     KID_VERIFICATION_TIMEOUT_SECONDS,
     PUBLIC_URL,
     VOICE_NARRATION_INTERVAL_SECONDS,
@@ -21,6 +22,7 @@ from db import (
     get_parent_for_kid,
     get_user_by_phone,
     set_onboarding_state,
+    set_payout_destination,
 )
 import memory
 from payment_service import (
@@ -467,6 +469,10 @@ async def _register_family(
 
     # Make memory tools work for subsequent tool calls in the same message.
     ctx["family_id"] = family_id
+
+    # Auto-set kid's payout destination if configured in env.
+    if KID_DEFAULT_PAYOUT_DESTINATION:
+        set_payout_destination(kid_id, KID_DEFAULT_PAYOUT_DESTINATION)
 
     # Seed an initial family memory (no-op if Supermemory disabled).
     from datetime import datetime, timezone
