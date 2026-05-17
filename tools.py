@@ -15,12 +15,25 @@ from config import (
 )
 from db import (
     create_family_with_users,
+    delete_family,
     get_kid_for_parent,
     get_parent_for_kid,
     get_user_by_phone,
     set_onboarding_state,
 )
 import memory
+
+
+# Names the LLM sometimes invents when the user hasn't actually given one.
+# Reject these to prevent garbage onboarding records.
+_PLACEHOLDER_NAMES = {
+    "unknown", "n/a", "na", "none", "null", "parent", "kid", "child",
+    "user", "anon", "anonymous", "guest", "test", "tbd", "?", "",
+}
+
+
+def _is_placeholder(name: str) -> bool:
+    return name.strip().lower() in _PLACEHOLDER_NAMES
 
 log = logging.getLogger(__name__)
 
@@ -155,6 +168,23 @@ TOOL_SCHEMAS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "unregister_family",
+            "description": (
+                "Delete the sender's family record entirely (parent + kid rows). "
+                "ONLY call this when a verified parent explicitly asks to start over, "
+                "unregister, delete their account, or remove their kid. After this, "
+                "the sender becomes UNKNOWN again and can re-register from scratch."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": False,
+            },
+        },
+    },
 ]
 
 
@@ -219,6 +249,25 @@ async def dispatch_tool(
             return "no relevant memories found."
         return memory.format_memories_block(results) or "no relevant memories found."
 
+    if name == "unregister_family":
+        sender = get_user_by_phone(sender_phone)
+        if not sender:
+            return "ERROR: you're not registered. Nothing to delete."
+        if sender["role"] != "parent":
+            return "ERROR: only the parent can unregister the family."
+        deleted = delete_family(sender["family_id"])
+        ctx["family_id"] = None
+        log.info(
+            "unregister_family deleted %d rows for family=%s (parent=%s)",
+            deleted,
+            sender["family_id"],
+            sender_phone,
+        )
+        return (
+            f"Family deleted ({deleted} rows). The parent and kid records are "
+            f"both gone. The sender can now register from scratch."
+        )
+
     return f"ERROR: unknown tool '{name}'"
 
 
@@ -231,7 +280,18 @@ async def _register_family(
     ctx: dict,
 ) -> str:
     if not parent_name or not kid_name or not kid_phone:
-        return "ERROR: missing parent_name, kid_name, or kid_phone."
+        return "ERROR: missing parent_name, kid_name, or kid_phone. Ask the user for the missing field."
+
+    if _is_placeholder(parent_name):
+        return (
+            f"ERROR: '{parent_name}' is not a real first name. Ask the user "
+            f"for their actual first name before calling register_family."
+        )
+    if _is_placeholder(kid_name):
+        return (
+            f"ERROR: '{kid_name}' is not a real kid's name. Ask the user "
+            f"for the kid's actual first name."
+        )
 
     if kid_phone == sender_phone:
         return "ERROR: the kid's phone number can't be the same as the parent's."

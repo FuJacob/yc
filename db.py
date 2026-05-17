@@ -131,3 +131,11 @@ def set_onboarding_state(user_id: int, state: str) -> None:
             "UPDATE users SET onboarding_state = ? WHERE id = ?",
             (state, user_id),
         )
+
+
+def delete_family(family_id: int) -> int:
+    """Delete a family and all its users. Returns rows deleted (users + 1 family)."""
+    with connect() as conn:
+        c1 = conn.execute("DELETE FROM users WHERE family_id = ?", (family_id,))
+        c2 = conn.execute("DELETE FROM families WHERE id = ?", (family_id,))
+        return c1.rowcount + c2.rowcount
