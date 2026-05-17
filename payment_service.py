@@ -43,7 +43,6 @@ async def set_kid_payout_destination(
     if isinstance(parent, str):
         return parent
 
-    kid = get_parent_for_kid  # noqa: F841 — silence import
     from db import get_kid_for_parent
 
     kid_user = get_kid_for_parent(parent["id"])

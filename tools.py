@@ -542,38 +542,46 @@ async def _dispatch_check_grades(sender_phone: str, student_name: str, ctx: dict
     if live_sessions is not None and live_url:
         live_sessions[session_id] = live_url
 
-    # 3. Text parent the live link before agent starts navigating
-    if live_url:
+    # 3. Build the live view link
+    live_view_url = f"{PUBLIC_URL}/live/{session_id}" if live_url else None
+
+    # 4. Send live link to parent immediately (best-effort, don't block on failure)
+    if live_view_url:
         try:
             await send_message(
-                sender_phone,
-                f"Checking now — watch live: {PUBLIC_URL}/live/{session_id}",
+                to_number=sender_phone,
+                body=f"Checking now — watch live: {live_view_url}",
             )
         except Exception:
             log.exception("Failed to send live link")
 
-    # 4. Stream steps as iMessages
+    # 5. Stream steps as iMessages
     steps_sent = 0
 
     async def on_step(summary: str):
         nonlocal steps_sent
         if steps_sent < MAX_STEP_MESSAGES:
             try:
-                await send_message(sender_phone, summary)
+                await send_message(to_number=sender_phone, body=summary)
                 steps_sent += 1
             except Exception:
                 log.exception("Failed to send step update")
 
-    # 5. Block until done (poll-based since we created session + task separately)
+    # 6. Block until done (poll-based since we created session + task separately)
     result = await stream_until_done(task_id, on_step=on_step)
 
     ctx["notify_kid_about_grades"] = True
+
     # Fire-and-forget grade snapshot to memory (no-op if Supermemory disabled).
     family_id = ctx.get("family_id")
     if family_id is not None:
         memory.fire_and_forget(
             memory.snapshot_grades(family_id, student_name, result)
         )
+
+    # Include live link in tool result so the LLM can mention it in its reply
+    if live_view_url:
+        return f"LIVE VIEW: {live_view_url}\n\n{result}"
     return result
 
 

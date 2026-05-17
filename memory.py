@@ -133,7 +133,7 @@ async def recall(
             len(results),
         )
         return results
-    except httpx.HTTPError as e:
+    except (httpx.HTTPError, ValueError) as e:
         log.warning("memory.recall error: %s", e)
         return []
 
@@ -230,6 +230,85 @@ def format_memories_block(results: list[dict]) -> str:
     if not lines:
         return ""
     return "RELEVANT MEMORIES:\n" + "\n".join(lines)
+
+
+async def purge_container(family_id: int) -> int:
+    """Delete all memories for a family's container tag.
+
+    Lists documents by containerTag, then deletes each one.
+    Returns count of documents deleted. Never raises.
+    """
+    if not _enabled():
+        return 0
+
+    tag = _container_tag(family_id)
+    headers = {
+        "Authorization": f"Bearer {SUPERMEMORY_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    deleted = 0
+
+    try:
+        async with httpx.AsyncClient(timeout=MEMORY_TIMEOUT_SECONDS) as client:
+            # List all documents in this container
+            r = await client.post(
+                f"{SUPERMEMORY_BASE_URL}/v3/documents/list",
+                headers=headers,
+                json={"containerTag": tag, "limit": 1000},
+            )
+            if r.status_code >= 400:
+                log.warning(
+                    "memory.purge_container list failed: %d %s",
+                    r.status_code, r.text[:200],
+                )
+                return 0
+
+            data = r.json()
+            docs = data.get("documents", []) if isinstance(data, dict) else []
+
+            # Delete each document
+            for doc in docs:
+                doc_id = doc.get("id") if isinstance(doc, dict) else None
+                if not doc_id:
+                    continue
+                dr = await client.delete(
+                    f"{SUPERMEMORY_BASE_URL}/v3/documents/{doc_id}",
+                    headers=headers,
+                )
+                if dr.status_code < 400:
+                    deleted += 1
+                else:
+                    log.warning(
+                        "memory.purge_container delete doc %s failed: %d",
+                        doc_id, dr.status_code,
+                    )
+    except httpx.HTTPError as e:
+        log.warning("memory.purge_container error: %s", e)
+
+    log.info("memory.purge_container family=%s deleted %d docs", family_id, deleted)
+    return deleted
+
+
+async def purge_all_containers() -> int:
+    """Purge memories for all family containers. Used by reset-db.
+
+    Since we don't track which family_ids have ever existed, we try
+    IDs 1 through 100 (generous upper bound for a hackathon project).
+    Returns total documents deleted.
+    """
+    if not _enabled():
+        log.info("memory.purge_all_containers: skipped (no API key)")
+        return 0
+
+    total = 0
+    for fid in range(1, 101):
+        count = await purge_container(fid)
+        total += count
+        if count == 0 and fid > 10:
+            # Stop early after 10 consecutive empty containers past id=10
+            break
+    log.info("memory.purge_all_containers: deleted %d docs total", total)
+    return total
 
 
 def fire_and_forget(coro) -> None:

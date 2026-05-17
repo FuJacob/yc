@@ -60,7 +60,7 @@ CHROME_PROFILE_DIR = PROJECT_ROOT / "chrome-profile"
 DB_PATH = PROJECT_ROOT / "familyops.db"
 
 # D2L
-D2L_URL = "https://learn.uwaterloo.ca/d2l/"
+D2L_URL = "https://learn.uwaterloo.ca/d2l/home/1255792"
 
 # Limits
 MAX_TOOL_CALLS = 6  # bumped from 4 in rfc-7 — now 5 LLM tools (incl. remember_fact, recall)
