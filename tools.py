@@ -22,6 +22,13 @@ from db import (
     set_onboarding_state,
 )
 import memory
+from payment_service import (
+    approve_payment_request,
+    create_payment_request,
+    decline_payment_request,
+    get_payment_request_status,
+    set_kid_payout_destination,
+)
 
 
 # Names the LLM sometimes invents when the user hasn't actually given one.
@@ -185,6 +192,125 @@ TOOL_SCHEMAS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "set_kid_payout_destination",
+            "description": (
+                "Set the kid's payout destination (a Sponge handle, USDC address, "
+                "bank account identifier, etc). Call this only for a VERIFIED parent. "
+                "Future approved payments will be sent there. Recognize phrases like "
+                "'send Alex's payments to ...', 'set payout to ...', 'pay Alex at ...'."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "destination": {
+                        "type": "string",
+                        "description": "Free-form destination identifier the parent provided.",
+                    }
+                },
+                "required": ["destination"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_payment_request",
+            "description": (
+                "Create a parent-approval payment request. Call this only for a "
+                "VERIFIED kid asking to pay for one specific service. The amount "
+                "must be integer cents; never pass a float amount."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "service_name": {
+                        "type": "string",
+                        "description": "Specific service or thing the kid wants to pay for.",
+                    },
+                    "amount_cents": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "description": "Requested amount in integer cents, e.g. $2.00 -> 200.",
+                    },
+                    "currency": {
+                        "type": "string",
+                        "description": "Currency code. Default USD.",
+                    },
+                    "reason": {
+                        "type": "string",
+                        "description": "Kid's short reason or context for the request.",
+                    },
+                },
+                "required": ["service_name", "amount_cents"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "approve_payment_request",
+            "description": (
+                "Approve a pending payment request. Call this only for a VERIFIED "
+                "parent in the same family. If the parent omits a code, the tool "
+                "will approve only when exactly one pending request exists."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "request_code": {
+                        "type": "string",
+                        "description": "6-digit payment request code, if provided.",
+                    }
+                },
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "decline_payment_request",
+            "description": (
+                "Decline a pending payment request. Call this only for a VERIFIED "
+                "parent in the same family."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "request_code": {
+                        "type": "string",
+                        "description": "6-digit payment request code, if provided.",
+                    }
+                },
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_payment_request_status",
+            "description": (
+                "Get the status of a payment request for a verified parent or the "
+                "kid who created it."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "request_code": {
+                        "type": "string",
+                        "description": "6-digit payment request code, if provided.",
+                    }
+                },
+                "additionalProperties": False,
+            },
+        },
+    },
 ]
 
 
@@ -266,6 +392,42 @@ async def dispatch_tool(
         return (
             f"Family deleted ({deleted} rows). The parent and kid records are "
             f"both gone. The sender can now register from scratch."
+        )
+
+    if name == "set_kid_payout_destination":
+        return await set_kid_payout_destination(
+            sender_phone=sender_phone,
+            destination=str(args.get("destination", "")).strip(),
+        )
+
+    if name == "create_payment_request":
+        amount_cents = args.get("amount_cents")
+        if isinstance(amount_cents, str) and amount_cents.isdigit():
+            amount_cents = int(amount_cents)
+        return await create_payment_request(
+            sender_phone=sender_phone,
+            service_name=str(args.get("service_name", "")).strip(),
+            amount_cents=amount_cents,
+            currency=str(args.get("currency") or "USD").strip(),
+            reason=str(args.get("reason", "")).strip(),
+        )
+
+    if name == "approve_payment_request":
+        return await approve_payment_request(
+            sender_phone=sender_phone,
+            request_code=str(args.get("request_code") or "").strip() or None,
+        )
+
+    if name == "decline_payment_request":
+        return await decline_payment_request(
+            sender_phone=sender_phone,
+            request_code=str(args.get("request_code") or "").strip() or None,
+        )
+
+    if name == "get_payment_request_status":
+        return await get_payment_request_status(
+            sender_phone=sender_phone,
+            request_code=str(args.get("request_code") or "").strip() or None,
         )
 
     return f"ERROR: unknown tool '{name}'"

@@ -1,12 +1,18 @@
 import json
 import logging
+from decimal import Decimal
 from typing import Optional
 
 from openai import AsyncOpenAI
 
 from agentphone_client import send_message
 from config import MAX_TOOL_CALLS, OPENAI_API_KEY, ORCHESTRATOR_MODEL
-from db import get_kid_for_parent, get_parent_for_kid, get_user_by_phone
+from db import (
+    get_active_payment_requests_for_family,
+    get_kid_for_parent,
+    get_parent_for_kid,
+    get_user_by_phone,
+)
 import memory
 from tools import TOOL_SCHEMAS, dispatch_tool
 
@@ -65,6 +71,7 @@ You help families with school logistics. Today you support:
 2. Verifying a kid — the kid replies YES (or similar) to the verification text.
 3. Checking the kid's grades on the school portal (Waterloo D2L).
 4. Remembering family facts across conversations (school, courses, tutors, preferences).
+5. Kid-initiated payment requests — a verified kid can ask for a specific service to be paid, and a verified parent can approve or decline before any money moves.
 
 DECISION RULES:
 - If CONTEXT says the sender is UNKNOWN: they're a new parent. Call register_family **only when you have all three real values directly from the user**: their own first name, their kid's first name, and their kid's phone number (digits). If ANY of those three is missing, ask ONE short follow-up question and DO NOT call register_family yet.
@@ -72,11 +79,22 @@ DECISION RULES:
 - Ask for ONE missing field at a time. Don't ask for everything in one message.
 - If a verified parent says "I'm done" / "delete me" / "start over" / "unregister", call unregister_family.
 - If CONTEXT says the sender is a kid with state=pending_verification and they reply YES / yeah / yep / sure / ok / confirm / etc, call confirm_kid with their own phone number.
+- If CONTEXT says the sender is a VERIFIED parent and they say approve/yes/pay for a payment request, call approve_payment_request with the 6-digit code if present. If no code is present, still call the tool; it will approve only if exactly one pending request exists.
+- If CONTEXT says the sender is a VERIFIED parent and they say decline/no/cancel for a payment request, call decline_payment_request with the 6-digit code if present.
+- If a verified parent or kid asks about payment/request status, call get_payment_request_status with the 6-digit code if present.
 - If CONTEXT says the sender is a VERIFIED parent and they're asking about grades / assignments / school performance, call check_d2l_grades with their kid's name.
-- If CONTEXT says the sender is a kid with state=verified and they text anything other than YES, reply exactly: "Only your parent uses me right now."
+- If CONTEXT says the sender is a verified kid and they ask to pay/buy/subscribe/use a paid service: if service and amount are present, call create_payment_request. Convert dollar amounts to integer cents, e.g. "$2" -> 200, and pass amount_cents as an integer. If service or amount is missing, ask one short follow-up.
+- If CONTEXT says the sender is a kid with state=verified and their text is not a payment request or payment status question, reply exactly: "Only your parent uses me right now."
 - If the user shares a durable fact about their kid or themselves ("remember Gabe is in 2A CS", "his tutor is on Tuesdays", "I prefer terse replies"), call remember_fact with the content + a sensible category (school_info / preference / relationship / approval).
 - If the user asks about something you might have heard before ("what's Gabe's tutor schedule", "anything you remember about him"), call recall with a short query string.
 - Always normalize phone numbers passed to tools — the tools handle messy formats, but include the digits.
+
+PAYMENT RULES:
+- Never execute spend from a kid message. Kids can only create payment requests.
+- Never change amount, service, or recipient after parent approval.
+- The "service" the kid names is descriptive text only. Approved payments always go to the kid's pre-configured payout destination on their user record.
+- If a verified PARENT says something like "send Alex's payments to <X>", "set payout to <X>", or "pay Alex at <X>", call set_kid_payout_destination with <X>.
+- Convert dollar amounts to integer cents before calling create_payment_request: "$2" -> 200, "$2.50" -> 250. Always pass amount_cents as an integer.
 
 CONTEXT NOTES:
 - The CONTEXT block in your system messages is the CURRENT TRUTH for who's registered/verified.
@@ -229,4 +247,29 @@ def _build_context(sender_phone: str) -> str:
                 f"Their parent: name={parent['name']}, phone={parent['phone']}"
             )
 
+    payment_lines = _build_payment_context(user["family_id"])
+    if payment_lines:
+        lines.extend(payment_lines)
+
     return "\n".join(lines)
+
+
+def _build_payment_context(family_id: int) -> list[str]:
+    requests = get_active_payment_requests_for_family(family_id)
+    if not requests:
+        return ["Active payment requests: none"]
+
+    lines = ["Active payment requests:"]
+    for row in requests[:5]:
+        amount = Decimal(row["amount_cents"]) / Decimal(100)
+        amount_text = (
+            f"${amount:.2f}"
+            if row["currency"] == "USD"
+            else f"{row['currency']} {amount:.2f}"
+        )
+        lines.append(
+            "- "
+            f"code={row['request_code']}, status={row['status']}, "
+            f"amount={amount_text}, service={row['service_name']}"
+        )
+    return lines

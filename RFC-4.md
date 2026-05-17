@@ -31,9 +31,9 @@ The core rule: **the LLM may create or summarize a request, but it must never ex
 - Requests include amount, currency, service name, reason, and optional service URL/payment URL.
 - Parent approval is idempotent and tied to a 6-digit request code.
 - Sponge handles the actual payment surface:
-  - x402/MPP paid endpoints through Sponge Wallet helpers.
-  - A hardcoded Sponge payment link for the Phase 3 demo path.
-  - Browser checkout / virtual card as a follow-on path for normal merchant websites.
+  - **Parent → kid transfer.** Parent's Sponge wallet sends funds to the kid's pre-configured payout destination (another Sponge handle, a USDC address, or a bank account Sponge can pay out to).
+  - Kid's payout destination is stored on the `users` row and set once per kid by the parent (`set_kid_payout_destination`).
+  - The "service" the kid names is just descriptive text on the approval prompt and audit log — money always lands at the kid's stored destination.
 - Payment actions are logged in an append-only audit table.
 - No raw card number, expiry, or CVC is logged, stored, or sent over AgentPhone.
 
@@ -115,7 +115,7 @@ The payment state machine lives in our backend, not in the prompt. Sponge is cal
 
 Build the first pass as an approval ledger plus one Sponge execution path.
 
-**Decision:** Phase 3 uses a Sponge payment link as the only automatic payment target. Hardcode one demo payment-link target/service in config or seed data. Do not decide between x402, MPP, browser checkout, and payment links live during the demo.
+**Decision:** Phase 3 executes payments as a single Sponge wallet **transfer** from the parent's wallet to the kid's pre-configured payout destination. No payment links, no browser checkout, no per-request setup. The destination is stored once on the kid's `users` row.
 
 ### Preferred Demo Path
 
