@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Stop FastAPI server + localtunnel.
+# Stop FastAPI server + ngrok tunnel.
 set -uo pipefail
 
 SERVER_PID_FILE="/tmp/familyops-server.pid"
@@ -26,8 +26,10 @@ _kill_pidfile() {
 _kill_pidfile "server" "$SERVER_PID_FILE"
 _kill_pidfile "tunnel" "$TUNNEL_PID_FILE"
 
-# Belt-and-suspenders: kill any uvicorn on :8000 and any localtunnel client
+# Belt-and-suspenders: kill any uvicorn on :8000 and any ngrok
 pkill -f "uvicorn main:app" 2>/dev/null || true
-pkill -f "localtunnel" 2>/dev/null || true
+pkill -f "ngrok http 8000" 2>/dev/null || true
+
+rm -f /tmp/familyops-tunnel-url
 
 echo "done."

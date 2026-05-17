@@ -1,8 +1,13 @@
 # RFC-1: Live Browser Streaming + Real-Time Progress
 
-**Status:** Draft
+**Status:** **Planned — NOT yet implemented.** Code currently follows [RFC.md](RFC.md) (local `browser-use` OSS package). This RFC is a *migration* — if implemented, it replaces the local browser stack, it doesn't run alongside.
 **Date:** 2026-05-17
-**Depends on:** RFC.md (core MVP)
+**Depends on:** RFC.md (core MVP, already shipped)
+**Conflicts with:** RFC.md §7 (local Browser Use) — this RFC removes that and routes through Browser Use Cloud SDK instead.
+
+> **What this RFC adds if shipped:** parent gets a live URL to watch the agent work + iMessage step-by-step updates. Closes the 20–40s dead-air window during a grade check.
+
+> **What this RFC trades off:** D2L auth moves from a local Chrome profile (which we own outright) to a Browser Use Cloud profile (which we re-sync before each demo). Higher demo risk if profile-sync misses Shibboleth/Duo cookies. Test thoroughly before committing.
 
 ---
 
@@ -77,9 +82,10 @@ BROWSER_USE_PROFILE_ID=prof_...
 
 ### 3. Cloud Browser Session with Streaming
 
-Replace `browser_agent.py` entirely. Key insight: use `client.sessions.create()` to get
-`live_url` immediately (before the agent starts navigating), then stream messages separately
-via `client.sessions.messages()` polling.
+Replace `browser_agent.py` entirely. Two functions — `create_d2l_session()` returns the
+live link instantly, `stream_until_done()` blocks while polling for step updates and the
+final result. This split lets us text the parent the live link before the agent even starts
+navigating.
 
 ```python
 import asyncio
@@ -87,79 +93,43 @@ import logging
 from typing import Callable, Optional
 
 from browser_use_sdk.v3 import AsyncBrowserUse
-from config import BROWSER_USE_API_KEY, BROWSER_USE_PROFILE_ID
+from config import BROWSER_USE_API_KEY, BROWSER_USE_PROFILE_ID, BROWSER_TIMEOUT_SECONDS
 
 log = logging.getLogger(__name__)
 client = AsyncBrowserUse(api_key=BROWSER_USE_API_KEY)
 
-async def check_d2l_grades(
-    student_name: str,
-    on_step: Optional[Callable] = None,
-) -> tuple[str, str]:
-    """Run cloud browser agent against D2L.
-    
-    Returns (grade_summary, live_url).
-    Calls on_step(summary) for each intermediate step.
-    """
-    task = (
-        f"You are logged into University of Waterloo D2L (Brightspace) as {student_name}. "
-        f"Navigate to https://learn.uwaterloo.ca/d2l/. Find the Grades section. "
-        f"Visit each current-term course and read the Grades page. "
-        f"Extract every course code with its current overall grade or percentage. "
-        f"Return plain-text summary, one course per line: 'COURSE_CODE: GRADE'. "
-        f"End with a single-line note identifying the lowest-performing course."
-    )
+D2L_TASK_TEMPLATE = (
+    "You are logged into University of Waterloo D2L (Brightspace) as {student_name}. "
+    "Navigate to https://learn.uwaterloo.ca/d2l/. Find the Grades section. "
+    "Visit each current-term course and read the Grades page. "
+    "Extract every course code with its current overall grade or percentage. "
+    "Return plain-text summary, one course per line: 'COURSE_CODE: GRADE'. "
+    "End with a single-line note identifying the lowest-performing course."
+)
 
-    # Step 1: Create session — live_url is available immediately
-    session = await client.sessions.create(
-        task=task,
-        model="claude-sonnet-4.6",
-        profile_id=BROWSER_USE_PROFILE_ID,
-    )
-    live_url = session.live_url
-    log.info("Cloud session %s created, live_url=%s", session.id, live_url)
 
-    # Step 2: Poll messages until terminal status
-    cursor = None
-    while True:
-        msgs = await client.sessions.messages(session.id, after=cursor, limit=100)
-        for m in msgs.messages:
-            cursor = str(m.id)
-            if on_step and m.summary:
-                await on_step(m.summary)
-
-        s = await client.sessions.get(session.id)
-        if s.status.value in ("idle", "stopped", "error", "timed_out"):
-            if not s.output:
-                raise RuntimeError(
-                    f"Browser Use session ended with status={s.status.value} and no output."
-                )
-            return str(s.output), live_url
-        await asyncio.sleep(2)
-```
-
-**Problem with this approach:** `check_d2l_grades` blocks until done, so the caller can't
-send the live link until after all streaming is complete. We need to split this into two
-functions:
-
-```python
 async def create_d2l_session(student_name: str) -> tuple[str, str]:
     """Create cloud session, return (session_id, live_url) immediately."""
-    task = ...  # same task string
     session = await client.sessions.create(
-        task=task,
+        task=D2L_TASK_TEMPLATE.format(student_name=student_name),
         model="claude-sonnet-4.6",
         profile_id=BROWSER_USE_PROFILE_ID,
     )
+    log.info("Cloud session %s created, live_url=%s", session.id, session.live_url)
     return str(session.id), session.live_url
+
 
 async def stream_until_done(
     session_id: str,
     on_step: Optional[Callable] = None,
+    timeout: float = BROWSER_TIMEOUT_SECONDS,
 ) -> str:
-    """Poll messages until session completes. Returns final output."""
+    """Poll messages until session completes or timeout. Returns final output."""
+    import time
+    deadline = time.monotonic() + timeout
     cursor = None
-    while True:
+
+    while time.monotonic() < deadline:
         msgs = await client.sessions.messages(session_id, after=cursor, limit=100)
         for m in msgs.messages:
             cursor = str(m.id)
@@ -169,13 +139,14 @@ async def stream_until_done(
         s = await client.sessions.get(session_id)
         if s.status.value in ("idle", "stopped", "error", "timed_out"):
             if not s.output:
-                raise RuntimeError(f"Session {session_id} ended with status={s.status.value}, no output.")
+                raise RuntimeError(
+                    f"Session {session_id} ended with status={s.status.value}, no output."
+                )
             return str(s.output)
         await asyncio.sleep(2)
-```
 
-This split lets the caller send the live link immediately after `create_d2l_session()`,
-then block on `stream_until_done()` for the result.
+    raise TimeoutError(f"Browser Use session {session_id} timed out after {timeout}s")
+```
 
 ### 4. Live View Page
 
@@ -186,8 +157,8 @@ Host a minimal page at `GET /live/{session_id}` that:
 - Adds pinch-to-zoom support via viewport meta tag
 - Shows a header: "FamilyOps — checking grades..."
 
-**Routing:** We store a `session_id → live_url` mapping in an in-memory dict when the
-cloud session is created. The `/live/{session_id}` route looks it up and renders the page.
+**Routing:** `_live_sessions` dict in `main.py` maps `session_id → live_url`. Populated by
+the tool dispatcher via `ctx["live_sessions"]`. The `/live/{session_id}` route looks it up.
 No database needed — these are ephemeral (cleared on restart is fine).
 
 ```python
@@ -240,56 +211,55 @@ disables interaction, and gives us a branded experience with zoom support.
 
 The flow in `tools.py` when dispatching `check_d2l_grades`:
 
-1. Call `check_d2l_grades()` which creates the cloud session and returns `live_url` immediately
-2. Register `session_id → live_url` in `_live_sessions` dict (imported from main)
-3. Send the parent the live link as a first message
-4. Stream step summaries as iMessages (capped at 5)
+1. `create_d2l_session()` → get `session_id` + `live_url` instantly
+2. Store `session_id → live_url` in `ctx["live_sessions"]` (passed through from `main.py` — no circular import)
+3. Text the parent the live link immediately
+4. `stream_until_done()` → poll steps, forward summaries as iMessages (capped at 5)
 5. Return the final grade output to the orchestrator
 
 ```python
-# In tools.py, during check_d2l_grades dispatch:
-from main import _live_sessions  # in-memory session store
+# In tools.py, check_d2l_grades dispatch:
+from browser_agent import create_d2l_session, stream_until_done
+from config import PUBLIC_URL
 
 async def _dispatch_check_grades(sender_phone: str, student_name: str, ctx: dict) -> str:
+    # 1. Create session — returns instantly
+    session_id, live_url = await create_d2l_session(student_name)
+
+    # 2. Register for /live/{session_id} route
+    ctx["live_sessions"][session_id] = live_url
+
+    # 3. Text parent the live link before agent starts navigating
+    await send_message(
+        sender_phone,
+        f"Checking now — watch live: {PUBLIC_URL}/live/{session_id}",
+    )
+
+    # 4. Stream steps as iMessages
     steps_sent = 0
     MAX_STEP_MESSAGES = 5
 
     async def on_step(summary: str):
         nonlocal steps_sent
         if steps_sent < MAX_STEP_MESSAGES:
-            await send_message(sender_phone, f">> {summary}")
+            await send_message(sender_phone, summary)
             steps_sent += 1
 
-    grades, live_url = await check_d2l_grades(student_name, on_step=on_step)
-
-    # Note: the live link is sent to the parent by the orchestrator's interstitial
-    # message (e.g. "Checking grades now — watch live: {url}"). The session_id is
-    # registered in _live_sessions so /live/{session_id} resolves.
+    # 5. Block until done
+    grades = await stream_until_done(session_id, on_step=on_step)
     ctx["notify_kid_about_grades"] = True
     return grades
 ```
 
 The parent sees:
 ```
-Checking grades now — watch live: https://abc.ngrok.app/live/sess_123
->> Navigating to D2L homepage...
->> Opening CS 136 grades page...
->> Found grade: CS 136 — 87%
->> Opening MATH 137 grades page...
->> Found grade: MATH 137 — 72%
+Checking now — watch live: https://abc.ngrok.app/live/sess_123
+Navigating to D2L homepage...
+Opening CS 136 grades page...
+Found grade: CS 136 — 87%
+Opening MATH 137 grades page...
+Found grade: MATH 137 — 72%
 [final grade summary]
-```
-
-**Open question:** The live link needs to be sent BEFORE streaming starts. Two options:
-- **(A)** Split `check_d2l_grades` into `create_session()` (returns live_url) + `run_and_stream()` (blocks until done). Send live link between the two calls.
-- **(B)** Have `check_d2l_grades` accept a callback for the initial live_url, which sends the message immediately.
-
-Option A is cleaner. The tool dispatcher would:
-```python
-session_id, live_url = await create_d2l_session(student_name)
-_live_sessions[session_id] = live_url
-await send_message(sender_phone, f"Checking now — watch live: {PUBLIC_URL}/live/{session_id}")
-grades = await stream_until_done(session_id, on_step=on_step)
 ```
 
 ### 6. Config Changes
@@ -297,9 +267,11 @@ grades = await stream_until_done(session_id, on_step=on_step)
 New env vars in `.env`:
 
 ```
-BROWSER_USE_PROFILE_ID=prof_...   # from profile sync script
-PUBLIC_URL=https://abc.ngrok.app  # ngrok URL, for live view links
+BROWSER_USE_PROFILE_ID=prof_...                       # from profile sync script
+PUBLIC_URL=https://populate-stem-goggles.ngrok-free.dev  # current ngrok URL
 ```
+
+`PUBLIC_URL` is set automatically by `scripts/start.sh` (written to `/tmp/familyops-tunnel-url`) so we can fall back to reading the file if `.env` is stale.
 
 `config.py` additions:
 
@@ -315,17 +287,15 @@ PUBLIC_URL = _env("PUBLIC_URL", default="http://localhost:8000")
 | File | Change |
 |---|---|
 | `browser_agent.py` | Full rewrite — cloud SDK, split into `create_d2l_session()` + `stream_until_done()` |
-| `tools.py` | Update check_d2l_grades dispatch: create session, send live link, stream steps |
-| `main.py` | Add `GET /live/{session_id}` route, `_live_sessions` dict, `HTMLResponse` |
+| `tools.py` | Update check_d2l_grades dispatch: create session, send live link, stream steps via `ctx` |
+| `main.py` | Add `GET /live/{session_id}` route, `_live_sessions` dict, pass into `ctx` |
 | `config.py` | Add `BROWSER_USE_PROFILE_ID`, `PUBLIC_URL` |
 | `requirements.txt` | Replace `browser-use` with `browser-use-sdk` |
 | `.env.example` | Add new env vars |
 
-**Note on circular imports:** `tools.py` currently imports from `browser_agent.py`, and the
-new design needs `tools.py` to import `_live_sessions` from `main.py`. Since `main.py` imports
-from `tools.py` via `agent.py`, this creates a circular import. Fix: move `_live_sessions` to
-a new `state.py` module (just a dict), or pass it through the `ctx` dict that already flows
-through the tool dispatcher.
+**Circular import avoidance:** `_live_sessions` dict lives in `main.py` and is passed into
+the tool dispatcher via the `ctx` dict (`ctx["live_sessions"] = _live_sessions`). This reuses
+the existing `ctx` plumbing — no new modules, no circular imports.
 
 ---
 
@@ -359,7 +329,7 @@ through the tool dispatcher.
 | Browser Use Cloud latency > local | Medium | Cloud has faster infra than a laptop. Likely net-neutral or faster. |
 | Step summaries too verbose / noisy | Low | Cap at 5 messages. Filter to meaningful summaries only. |
 | ngrok URL changes on restart | Low | Update `PUBLIC_URL` in `.env` and re-register webhook. |
-| Circular import (tools → main) | Low | Use `ctx` dict or a `state.py` module for `_live_sessions`. |
+| Profile sync script URL unverified | Low | Verify `https://browser-use.com/profile.sh` exists before demo. Fallback: manual cookie export via CDP. |
 | Cloud session left running | Low | Don't set `keep_alive=True`. Sessions auto-stop on task completion. |
 
 ---
@@ -371,3 +341,10 @@ through the tool dispatcher.
 - Persistent conversation history
 - Any changes to onboarding flow
 - Kid-facing live view (only parent sees it)
+
+## What We're Removing
+
+- `browser-use` OSS package (replaced by `browser-use-sdk`)
+- `playwright install chromium` setup step (no local browser needed)
+- Local Chrome profile dir (`./chrome-profile`) — still needed for cookie sync source, but no longer used at runtime
+- `BROWSER_TIMEOUT_SECONDS` usage via `asyncio.wait_for` — replaced by `stream_until_done` timeout parameter

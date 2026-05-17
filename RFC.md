@@ -1,10 +1,14 @@
 # RFC: FamilyOps MVP
 
-**Status:** Ready for Implementation
+**Status:** **Shipped** (Phases 0–5 complete; see git log)
 **Author:** Jacob Fu
 **Date:** 2026-05-17
 **Hackathon:** Call My Agent (AgentPhone @ YC, May 17 2026)
-**Revision:** v3
+**Revision:** v4
+
+> **Related RFCs:** [RFC-1.md](RFC-1.md) (Planned — migrate to Browser Use Cloud SDK with live streaming) · [rfc-7.md](rfc-7.md) (Planned — Supermemory integration) · [POLISH.md](POLISH.md) (stretch goals / risk mitigation)
+
+> **What's in this RFC:** the contract for what's actually running today. If the code disagrees, the code wins and this doc is wrong — flag it.
 
 ---
 
@@ -92,13 +96,13 @@ One FastAPI process. Local during the hackathon, exposed to AgentPhone via ngrok
 
 | Layer | Choice | Why |
 |---|---|---|
-| Messaging | **AgentPhone** | Required. Webhook delivers iMessage + SMS. We POST `/v1/messages` to reply. |
-| Runtime | **Python 3.12 + FastAPI** | Browser Use's OSS package is Python-first. Reagan's hackathon stack. |
+| Messaging | **AgentPhone** | Required. Webhook delivers iMessage + SMS. We POST `/v1/messages` to reply. **Note:** outbound SMS requires 10DLC registration; iMessage works immediately. |
+| Runtime | **Python 3.11 + FastAPI** | Browser Use's OSS package needs ≥3.11. (Homebrew didn't have 3.12 installed; 3.13 untested. Pin `/opt/homebrew/bin/python3.11`.) |
 | Orchestrator LLM | **`gpt-5.4-nano-2026-03-17`** via OpenAI SDK | Cheap, fast, tool-calling. Used for: routing inbound messages, calling tools, formatting iMessage replies. |
-| Browser automation | **`browser-use`** Python package (OSS, local) — `Agent` + `BrowserSession` | Runs Chromium on the laptop, attached to the user's real Chrome profile dir so D2L is already logged in. No credentials in our code. |
+| Browser automation | **`browser-use`** Python package (OSS, local) — `Agent` + `BrowserSession` | Runs Chromium on the laptop, attached to a dedicated `./chrome-profile` dir so D2L is already logged in. No credentials in our code. |
 | Browser LLM | **`ChatBrowserUse()`** → `claude-sonnet-4.6` via Browser Use's hosted models | Uses `BROWSER_USE_API_KEY` (we have credits). No OpenAI spend on the browser loop. Sonnet 4.6 is what Browser Use tunes for. |
 | Database | **SQLite** (`familyops.db`) | One file, zero setup. Two tables. |
-| Tunneling | **ngrok** | Static domain if available. |
+| Tunneling | **ngrok** (requires authtoken: `ngrok config add-authtoken …`) | `scripts/start.sh` boots ngrok and registers the URL with AgentPhone automatically. Free-tier subdomain changes per restart. |
 | Secrets | `.env` + `python-dotenv` | Standard. |
 
 ### Rejected
@@ -129,7 +133,7 @@ Two tables. Deliberately thin.
 | `phone` | TEXT UNIQUE | E.164, e.g. `+14155551234` |
 | `name` | TEXT | First name |
 | `role` | TEXT | `parent` or `kid` |
-| `onboarding_state` | TEXT | `pending_verification`, `verified`. LLM tools mutate this. |
+| `onboarding_state` | TEXT | `pending_verification`, `verified`. **Asymmetry:** parent is created `verified` on `register_family` (we trust the sender's phone); kid stays `pending_verification` until they reply YES, then `confirm_kid` flips them. |
 | `created_at` | TEXT | |
 
 ### What we are NOT storing
@@ -166,21 +170,19 @@ Replies to the user are written by the LLM itself — except the kid verificatio
 
 ## 7. Browser Use Integration
 
-Pattern (lifted from a known-good codebase):
+Implementation pattern (matches `browser_agent.py`):
 
 ```python
-from pathlib import Path
-from browser_use import Agent, ChatBrowserUse, BrowserSession
-
-chrome_profile = Path.home() / "Library/Application Support/Google/Chrome"
+from browser_use import Agent, BrowserSession, ChatBrowserUse
+from config import CHROME_PROFILE_DIR   # = PROJECT_ROOT / "chrome-profile"
 
 session = BrowserSession(
-    user_data_dir=chrome_profile,
-    headless=False,           # visible for the demo
-    channel="chrome",         # real Chrome, not chromium
+    user_data_dir=str(CHROME_PROFILE_DIR),   # dedicated project dir, NOT the daily-driver profile
+    headless=False,                          # visible for the demo
+    channel="chrome",                        # real Chrome, not chromium
 )
 
-llm = ChatBrowserUse()        # Sonnet 4.6 via BROWSER_USE_API_KEY
+llm = ChatBrowserUse()                       # Sonnet 4.6 via BROWSER_USE_API_KEY
 
 agent = Agent(
     task=(
@@ -196,17 +198,24 @@ agent = Agent(
     max_actions_per_step=2,
 )
 
-result = await agent.run(max_steps=25)
+result = await agent.run(max_steps=30)
 extracted = result.final_result()   # string we hand back to orchestrator
 ```
 
-### Chrome caveat
-`user_data_dir` requires Chrome to not be running on that profile when the agent launches (Chrome locks it). Two options:
+### Chrome profile setup
+We use a **dedicated `./chrome-profile`** dir (not your daily-driver Chrome profile). Reasons:
+- Leaves your main Chrome usable during the hackathon
+- Removes "did I close Chrome?" as a demo failure mode (`user_data_dir` requires no other Chrome instance locking it)
+- Demo visual is still strong — Browser Use opens its own Chrome window live on stage
 
-- **Demo flow (recommended):** keep Chrome closed during agent runs. The judges see Browser Use's window open live — that's the visual.
-- **Dev flow:** create a dedicated profile dir (e.g. `./chrome-profile`), launch Chrome once manually with `--user-data-dir=./chrome-profile`, log into D2L, close. Subsequent agent runs use that dir without fighting the user's main Chrome.
+One-time setup:
+```bash
+mkdir -p chrome-profile
+open -na "Google Chrome" --args --user-data-dir="$PWD/chrome-profile"
+# log into learn.uwaterloo.ca/d2l/ in that window, complete 2FA, then Cmd+Q
+```
 
-Phase 0 should pick one and stick with it. **Recommendation: dedicated `./chrome-profile` dir** — leaves the user's daily-driver Chrome alone, removes "did I remember to close Chrome?" as a demo failure mode.
+During a demo run, **don't have a Chrome window open against `./chrome-profile`** — the agent needs exclusive access to spawn Chromium against that dir.
 
 ---
 
@@ -273,14 +282,23 @@ The kid notification is **not** an LLM tool. Hardcoded after `check_d2l_grades` 
 ## 9. File Layout
 
 ```
-familyops/
+yc/  (project root)
   main.py                 # FastAPI app, /webhook handler
   agent.py                # Orchestrator: build context, run LLM loop
   tools.py                # Tool schema + dispatcher
-  agentphone_client.py    # send_message, verify_signature
+  agentphone_client.py    # send_message (with retry), verify_signature
   browser_agent.py        # browser_use Agent wrapper for check_d2l_grades
   db.py                   # SQLite connection, queries
   config.py               # env var loading, constants
+  chrome-profile/         # dedicated Chrome user_data_dir (gitignored)
+  scripts/
+    start.sh              # boots uvicorn + ngrok + registers webhook
+    stop.sh               # kills pidfiles + pkill belt-and-suspenders
+    restart.sh            # stop + start
+    status.sh             # process state + tunnel URL + DB summary + webhook config
+    logs.sh               # tail server log (`-t` adds tunnel log)
+    reset-db.sh           # wipe familyops.db and recreate schema
+    resend-verification.sh   # retry sending verification text on AgentPhone outage
   requirements.txt
   .env.example
   README.md               # setup + demo runbook
@@ -341,15 +359,18 @@ Time-boxed against 9:30 AM → 8 PM (10.5 hrs of hacking).
 
 | Risk | Mitigation |
 |---|---|
-| D2L UI changes break Browser Use mid-demo | Test the exact grade-check task ≥2 times during Phase 4. If shaky, cache last successful output as canned fallback. |
+| D2L UI changes break Browser Use mid-demo | Test the exact grade-check task ≥2 times during Phase 4. If shaky, cache last successful output as canned fallback (see POLISH.md §1.2). |
 | D2L session in `./chrome-profile` expires | Re-log-in 30 min before demo. Test the agent right after. |
 | Chrome profile lock conflict | We use a dedicated profile dir, not the main one. Don't double-launch the agent. |
-| AgentPhone webhook delivery delays/loss | ngrok logs visible; have a manual `send_message` CLI ready as backup. |
+| **AgentPhone `/v1/messages` 502 outage** | **Hit this today.** `send_message` retries 4× with backoff (1s, 3s, 7s, 15s). When AP recovers, `scripts/resend-verification.sh` refires pending kid verifications. |
+| **AgentPhone outbound SMS requires 10DLC** | iMessage works without it (blue bubbles). Demo phones must have iMessage enabled. If a kid phone is non-iMessage, register 10DLC via the dashboard. |
+| AgentPhone webhook delivery delays/loss | ngrok logs visible; `scripts/status.sh` shows the webhook config. |
 | LLM hallucinates a kid name not in DB | Tool returns error; LLM apologizes. |
-| iMessage doesn't deliver | SMS fallback works on the same number. |
-| Browser Use rate-limit / slow | Hard 60s timeout + interstitial text covers UX. |
-| `gpt-5.4-nano` too dumb for tool routing | Swap to `gpt-5.4-mini` or `gpt-5`. Same key, one-line change. |
+| iMessage doesn't deliver | SMS fallback works on the same number (after 10DLC registration). |
+| Browser Use rate-limit / slow | Hard 90s timeout (`BROWSER_TIMEOUT_SECONDS` in config) + interstitial text covers UX. |
+| `gpt-5.4-nano` too dumb for tool routing | Swap to `gpt-5.4-mini` or `gpt-5`. Override via `ORCHESTRATOR_MODEL` env var, no code change. |
 | Local Chromium dies / crashes | Agent retries `max_failures=3`. If still failing, return graceful error. |
+| ngrok URL changes on restart | `scripts/start.sh` re-registers the new URL with AgentPhone automatically. Free-tier subdomain randomizes — paid plan unlocks a static one. |
 
 ---
 
@@ -373,6 +394,6 @@ Time-boxed against 9:30 AM → 8 PM (10.5 hrs of hacking).
 
 ---
 
-## 13. Open Questions
+## 13. Status
 
-None. Implementation can start on go.
+Shipped per Phases 0–5. Implementation lives in the project root (see `git log`). Open work tracked in [POLISH.md](POLISH.md) and [RFC-1.md](RFC-1.md) / [rfc-7.md](rfc-7.md) for next-iteration features.

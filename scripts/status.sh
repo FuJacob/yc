@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
-# Show what's running, the current tunnel URL, and the AgentPhone webhook config.
+# Show what's running, the current ngrok URL, and the AgentPhone webhook config.
 set -uo pipefail
 
 cd "$(dirname "$0")/.."
 
 SERVER_PID_FILE="/tmp/familyops-server.pid"
 TUNNEL_PID_FILE="/tmp/familyops-tunnel.pid"
-TUNNEL_LOG="/tmp/familyops-tunnel.log"
 
 echo "=== local processes ==="
 if [ -f "$SERVER_PID_FILE" ] && kill -0 "$(cat $SERVER_PID_FILE)" 2>/dev/null; then
@@ -21,18 +20,18 @@ else
   echo "tunnel: NOT running"
 fi
 
-if [ -f "$TUNNEL_LOG" ]; then
-  URL=$(grep "your url is:" "$TUNNEL_LOG" 2>/dev/null | head -1 | sed 's/.*your url is: //')
-  if [ -n "$URL" ]; then
-    echo "tunnel url: $URL"
-  fi
+# Query ngrok's local API for the current public URL (more reliable than log grep)
+URL=$(curl -s --max-time 3 http://localhost:4040/api/tunnels 2>/dev/null \
+  | .venv/bin/python -c "import json,sys; d=json.load(sys.stdin); t=d.get('tunnels',[]); print(t[0]['public_url']) if t else None" \
+  2>/dev/null || true)
+if [ -n "$URL" ]; then
+  echo "tunnel url: $URL"
 fi
 
 echo ""
 echo "=== database ==="
-if [ -f familyops.db ]; then
-  if [ -x .venv/bin/python ]; then
-    .venv/bin/python <<'PY'
+if [ -f familyops.db ] && [ -x .venv/bin/python ]; then
+  .venv/bin/python <<'PY'
 import sqlite3
 c = sqlite3.connect("familyops.db")
 fam = c.execute("SELECT COUNT(*) FROM families").fetchone()[0]
@@ -41,7 +40,6 @@ print(f"familyops.db: {fam} families, {usr} users")
 for row in c.execute("SELECT id, name, role, phone, onboarding_state FROM users ORDER BY id"):
     print(f"  user {row[0]}: {row[1]} ({row[2]}) {row[3]} [{row[4]}]")
 PY
-  fi
 else
   echo "familyops.db: missing"
 fi
@@ -49,8 +47,8 @@ fi
 echo ""
 echo "=== agentphone webhook ==="
 if [ -x .venv/bin/python ]; then
-  .venv/bin/python <<'PY'
-import os, json
+  .venv/bin/python <<'PY' || true
+import os
 from dotenv import load_dotenv
 import httpx
 load_dotenv(".env", override=True)
@@ -59,11 +57,15 @@ agent_id = os.environ.get("AGENT_PHONE_AGENT_ID", "")
 if not key or not agent_id:
     print("no AGENT_PHONE_API_KEY / AGENT_ID in .env")
     raise SystemExit
-r = httpx.get(
-    f"https://api.agentphone.ai/v1/agents/{agent_id}/webhook",
-    headers={"Authorization": f"Bearer {key}"},
-    timeout=10,
-)
+try:
+    r = httpx.get(
+        f"https://api.agentphone.ai/v1/agents/{agent_id}/webhook",
+        headers={"Authorization": f"Bearer {key}"},
+        timeout=5,
+    )
+except httpx.HTTPError as e:
+    print(f"agentphone unreachable: {type(e).__name__}")
+    raise SystemExit
 if r.status_code == 200:
     d = r.json()
     print(f"url:    {d.get('url')}")
@@ -71,6 +73,6 @@ if r.status_code == 200:
 elif r.status_code == 404:
     print("no webhook configured for this agent")
 else:
-    print(f"error: {r.status_code} {r.text}")
+    print(f"error: {r.status_code} {r.text[:200]}")
 PY
 fi

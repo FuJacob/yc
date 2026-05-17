@@ -8,7 +8,7 @@ See [RFC.md](RFC.md) for design + scope.
 
 ## Prerequisites
 
-- Python 3.12
+- Python 3.11 (Homebrew: `brew install python@3.11`)
 - Google Chrome installed at the standard location
 - An AgentPhone account with API key + agent + number provisioned
 - OpenAI API key
@@ -70,37 +70,51 @@ In the Chrome window that opens:
 3. Confirm you can see the homepage
 4. **Quit Chrome completely** (Cmd+Q) before running the agent — Chrome locks the profile dir.
 
-### 4. Tunnel + AgentPhone webhook
-
-Start ngrok in one terminal:
+### 4. ngrok auth (one-time)
 
 ```bash
-ngrok http 8000
+# Get a token from https://dashboard.ngrok.com/get-started/your-authtoken
+ngrok config add-authtoken YOUR_NGROK_TOKEN
 ```
 
-Note the HTTPS URL ngrok prints. Then point AgentPhone at it:
+### 5. Run everything
 
 ```bash
-curl -X POST https://api.agentphone.ai/v1/webhooks \
-  -H "Authorization: Bearer $AGENT_PHONE_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"url":"https://YOUR-NGROK-URL.ngrok.app/webhook"}'
+scripts/start.sh
 ```
 
-The response includes a `secret` — if you want HMAC verification, paste it into `AGENT_PHONE_WEBHOOK_SECRET` and restart the server.
+This boots uvicorn, starts ngrok, reads the public URL from ngrok's local API, and POSTs that URL to AgentPhone as the agent webhook — in one shot. Output looks like:
+
+```
+ready.
+  server pid:  12345
+  tunnel pid:  12346
+  tunnel url:  https://populate-stem-goggles.ngrok-free.dev
+  webhook:     https://populate-stem-goggles.ngrok-free.dev/webhook
+```
+
+Other dev commands:
+
+| Script | Does |
+|---|---|
+| `scripts/stop.sh` | Stops both processes |
+| `scripts/restart.sh` | Stop + start (re-registers webhook with new ngrok URL) |
+| `scripts/status.sh` | Process state + tunnel URL + DB summary + AgentPhone webhook config |
+| `scripts/logs.sh` | `tail -F` server log (`-t` adds tunnel log) |
+| `scripts/reset-db.sh` | Wipe `familyops.db`, recreate empty schema |
+| `scripts/resend-verification.sh [phone]` | Re-fire verification text on AgentPhone 502 outage |
+
+### Webhook secret (optional, for production)
+
+The first call to AgentPhone's webhook-register endpoint returns a `secret`. If you set `AGENT_PHONE_WEBHOOK_SECRET=<that secret>` in `.env` and restart, the server starts verifying HMAC signatures on inbound webhooks. Leave it empty for dev — signature verification is skipped.
 
 ---
 
-## Run
+## Health check
 
 ```bash
-.venv/bin/uvicorn main:app --reload --port 8000
-```
-
-Health check:
-
-```bash
-curl localhost:8000/health
+curl localhost:8000/health      # local
+curl $(cat /tmp/familyops-tunnel-url)/health  # via ngrok
 ```
 
 ---
