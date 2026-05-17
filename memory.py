@@ -157,19 +157,60 @@ async def snapshot_grades(
     await remember(family_id, content, metadata)
 
 
-def _result_to_line(result: dict) -> str:
-    """Format one search result for the LLM context block."""
-    # Supermemory may return either memory hits or chunk hits; both have content-like fields
-    memory = result.get("memory") or {}
+def _extract_text(value: Any) -> str:
+    """Return a content string from value (which may be str, dict, or None)."""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        return (
+            value.get("content")
+            or value.get("memory")
+            or value.get("text")
+            or ""
+        )
+    return ""
+
+
+def _extract_metadata_from(container: Any) -> dict:
+    """Return container['metadata'] if it's a dict, else {}."""
+    if isinstance(container, dict):
+        md = container.get("metadata")
+        if isinstance(md, dict):
+            return md
+    return {}
+
+
+def _result_to_line(result: Any) -> str:
+    """Format one search result for the LLM context block.
+
+    Supermemory returns varying shapes across endpoints:
+      {"content": "...", "metadata": {...}}
+      {"memory": "...", "metadata": {...}}              ← memory is a string
+      {"memory": {"content": "...", "metadata": {...}}}  ← memory is a dict
+      {"chunk":  {"content": "..."}, "metadata": {...}}
+    We try them all and bail on anything we don't recognize.
+    """
+    if not isinstance(result, dict):
+        return ""
+
+    mem = result.get("memory")
+    chunk = result.get("chunk")
+
     content = (
-        result.get("content")
-        or memory.get("content")
-        or memory.get("memory")
-        or result.get("chunk", {}).get("content")
-        or ""
+        _extract_text(result.get("content"))
+        or _extract_text(mem)
+        or _extract_text(chunk)
     )
-    md = result.get("metadata") or memory.get("metadata") or {}
-    category = md.get("category", "memory")
+    if not content:
+        return ""
+
+    # Metadata: check the root first, then peek inside memory/chunk wrappers.
+    md = (
+        _extract_metadata_from(result)
+        or _extract_metadata_from(mem)
+        or _extract_metadata_from(chunk)
+    )
+    category = md.get("category") or "memory"
     return f"- ({category}) {content}".strip()
 
 
@@ -179,8 +220,12 @@ def format_memories_block(results: list[dict]) -> str:
         return ""
     lines = []
     for r in results:
-        line = _result_to_line(r)
-        if line and line != "- (memory)":
+        try:
+            line = _result_to_line(r)
+        except Exception as e:
+            log.warning("memory format error on result %r: %s", r, e)
+            continue
+        if line:
             lines.append(line)
     if not lines:
         return ""
