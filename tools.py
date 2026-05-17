@@ -535,8 +535,10 @@ async def _dispatch_check_grades(sender_phone: str, student_name: str, ctx: dict
     """Create cloud browser session, send live link, stream steps, return grades."""
     live_sessions = ctx.get("live_sessions")
 
-    # 1. Create session + task — returns instantly with live_url
-    task_id, session_id, live_url = await create_d2l_session(student_name)
+    # 1. Create session + task — returns instantly with live_url + task_response.
+    #    task_response is what stream_until_done needs to emit step updates;
+    #    discarding it (as the previous code did) silently kills on_step.
+    task_id, session_id, live_url, task_response = await create_d2l_session(student_name)
 
     # 2. Register for /live/{session_id} route
     if live_sessions is not None and live_url:
@@ -564,8 +566,10 @@ async def _dispatch_check_grades(sender_phone: str, student_name: str, ctx: dict
             except Exception:
                 log.exception("Failed to send step update")
 
-    # 5. Block until done (poll-based since we created session + task separately)
-    result = await stream_until_done(task_id, on_step=on_step)
+    # 5. Block until done, streaming intermediate steps via on_step.
+    result = await stream_until_done(
+        task_id, task_response=task_response, on_step=on_step
+    )
 
     ctx["notify_kid_about_grades"] = True
     # Fire-and-forget grade snapshot to memory (no-op if Supermemory disabled).

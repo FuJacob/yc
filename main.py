@@ -50,10 +50,16 @@ LIVE_PAGE_HTML = """<!DOCTYPE html>
 <body>
   <header>FamilyOps — checking grades...</header>
   <div class="viewer">
-    <iframe src="{live_url}&theme=dark&ui=false" allow="autoplay"></iframe>
+    <iframe src="{iframe_src}" allow="autoplay"></iframe>
   </div>
 </body>
 </html>"""
+
+
+def _build_iframe_src(live_url: str) -> str:
+    """Append theme/ui params to the live_url, picking `?` or `&` correctly."""
+    sep = "&" if "?" in live_url else "?"
+    return f"{live_url}{sep}theme=dark&ui=false"
 
 
 @app.get("/health")
@@ -66,7 +72,9 @@ async def live_view(session_id: str):
     live_url = _live_sessions.get(session_id)
     if not live_url:
         raise HTTPException(status_code=404, detail="Session not found or expired")
-    return HTMLResponse(LIVE_PAGE_HTML.format(live_url=live_url))
+    return HTMLResponse(
+        LIVE_PAGE_HTML.format(iframe_src=_build_iframe_src(live_url))
+    )
 
 
 @app.post("/webhook")
