@@ -23,6 +23,13 @@ from db import (
     set_onboarding_state,
 )
 import memory
+from payment_service import (
+    approve_payment_request,
+    create_payment_request,
+    decline_payment_request,
+    get_payment_request_status,
+    set_kid_payout_destination,
+)
 
 
 # Names the LLM sometimes invents when the user hasn't actually given one.
@@ -186,6 +193,125 @@ TOOL_SCHEMAS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "set_kid_payout_destination",
+            "description": (
+                "Set the kid's payout destination (a Sponge handle, USDC address, "
+                "bank account identifier, etc). Call this only for a VERIFIED parent. "
+                "Future approved payments will be sent there. Recognize phrases like "
+                "'send Alex's payments to ...', 'set payout to ...', 'pay Alex at ...'."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "destination": {
+                        "type": "string",
+                        "description": "Free-form destination identifier the parent provided.",
+                    }
+                },
+                "required": ["destination"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_payment_request",
+            "description": (
+                "Create a parent-approval payment request. Call this only for a "
+                "VERIFIED kid asking to pay for one specific service. The amount "
+                "must be integer cents; never pass a float amount."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "service_name": {
+                        "type": "string",
+                        "description": "Specific service or thing the kid wants to pay for.",
+                    },
+                    "amount_cents": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "description": "Requested amount in integer cents, e.g. $2.00 -> 200.",
+                    },
+                    "currency": {
+                        "type": "string",
+                        "description": "Currency code. Default USD.",
+                    },
+                    "reason": {
+                        "type": "string",
+                        "description": "Kid's short reason or context for the request.",
+                    },
+                },
+                "required": ["service_name", "amount_cents"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "approve_payment_request",
+            "description": (
+                "Approve a pending payment request. Call this only for a VERIFIED "
+                "parent in the same family. If the parent omits a code, the tool "
+                "will approve only when exactly one pending request exists."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "request_code": {
+                        "type": "string",
+                        "description": "6-digit payment request code, if provided.",
+                    }
+                },
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "decline_payment_request",
+            "description": (
+                "Decline a pending payment request. Call this only for a VERIFIED "
+                "parent in the same family."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "request_code": {
+                        "type": "string",
+                        "description": "6-digit payment request code, if provided.",
+                    }
+                },
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_payment_request_status",
+            "description": (
+                "Get the status of a payment request for a verified parent or the "
+                "kid who created it."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "request_code": {
+                        "type": "string",
+                        "description": "6-digit payment request code, if provided.",
+                    }
+                },
+                "additionalProperties": False,
+            },
+        },
+    },
 ]
 
 
@@ -258,6 +384,42 @@ async def dispatch_tool(
         return (
             f"Family deleted ({deleted} rows). The parent and kid records are "
             f"both gone. The sender can now register from scratch."
+        )
+
+    if name == "set_kid_payout_destination":
+        return await set_kid_payout_destination(
+            sender_phone=sender_phone,
+            destination=str(args.get("destination", "")).strip(),
+        )
+
+    if name == "create_payment_request":
+        amount_cents = args.get("amount_cents")
+        if isinstance(amount_cents, str) and amount_cents.isdigit():
+            amount_cents = int(amount_cents)
+        return await create_payment_request(
+            sender_phone=sender_phone,
+            service_name=str(args.get("service_name", "")).strip(),
+            amount_cents=amount_cents,
+            currency=str(args.get("currency") or "USD").strip(),
+            reason=str(args.get("reason", "")).strip(),
+        )
+
+    if name == "approve_payment_request":
+        return await approve_payment_request(
+            sender_phone=sender_phone,
+            request_code=str(args.get("request_code") or "").strip() or None,
+        )
+
+    if name == "decline_payment_request":
+        return await decline_payment_request(
+            sender_phone=sender_phone,
+            request_code=str(args.get("request_code") or "").strip() or None,
+        )
+
+    if name == "get_payment_request_status":
+        return await get_payment_request_status(
+            sender_phone=sender_phone,
+            request_code=str(args.get("request_code") or "").strip() or None,
         )
 
     return f"ERROR: unknown tool '{name}'"
@@ -482,15 +644,22 @@ VOICE_TOOL_SCHEMAS = [
         "function": {
             "name": "wait_for_kid_confirmation",
             "description": (
-                "Block for up to timeout_seconds while the kid replies YES via SMS. "
-                "Use right after register_family. Returns {confirmed: true, kid_name} "
-                "if they replied, {confirmed: false} on timeout."
+                "Block for up to timeout_seconds (default 12, max 20) while the kid "
+                "replies YES via SMS. Returns {confirmed: true, kid_name} on success "
+                "or {confirmed: false} on timeout. ON TIMEOUT: say something brief "
+                "like 'still waiting on Alex' and CALL THIS TOOL AGAIN to keep "
+                "polling. Do not give up after one timeout — kids sometimes take "
+                "30-60 seconds to read and reply."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "kid_phone": {"type": "string"},
-                    "timeout_seconds": {"type": "integer", "default": 45},
+                    "timeout_seconds": {
+                        "type": "integer",
+                        "default": 12,
+                        "description": "Per-call wait in seconds. Hard-capped at 20.",
+                    },
                 },
                 "required": ["kid_phone"],
                 "additionalProperties": False,
@@ -596,10 +765,20 @@ def _voice_caller_context(from_number: str) -> str:
     return "Verified caller: " + ", ".join(parts)
 
 
+_WAIT_FOR_KID_HARD_CAP_SECONDS = 20
+
+
 async def _voice_wait_for_kid_confirmation(kid_phone: str, timeout_seconds: int) -> dict:
-    """Poll the DB until the kid's onboarding flips to verified, or timeout."""
+    """Poll the DB until the kid's onboarding flips to verified, or timeout.
+
+    Capped at 20s regardless of caller-supplied timeout — anything longer would
+    exceed AgentPhone's webhook timeout and AgentPhone would drop the tool
+    response. The voice model is prompted to re-invoke this tool on a False
+    return to keep polling.
+    """
     kid_phone = normalize_phone(kid_phone)
-    deadline = asyncio.get_event_loop().time() + max(1, timeout_seconds)
+    timeout_seconds = min(max(1, timeout_seconds), _WAIT_FOR_KID_HARD_CAP_SECONDS)
+    deadline = asyncio.get_event_loop().time() + timeout_seconds
     while asyncio.get_event_loop().time() < deadline:
         kid = get_user_by_phone(kid_phone)
         if kid and kid["onboarding_state"] == "verified":
@@ -738,11 +917,16 @@ async def dispatch_voice_tool(payload: dict) -> dict:
             output = _voice_caller_context(from_number)
 
         elif tool_name == "register_family":
+            # Voice callers are by definition unregistered, so family_id starts None.
+            # _register_family writes the new id back into ctx so any subsequent
+            # tools in the same call would see it.
+            voice_ctx: dict = {"family_id": None}
             output = await _register_family(
                 sender_phone=from_number,
                 parent_name=str(args.get("parent_name", "")).strip(),
                 kid_name=str(args.get("kid_name", "")).strip(),
                 kid_phone=normalize_phone(str(args.get("kid_phone", ""))),
+                ctx=voice_ctx,
             )
 
         elif tool_name == "wait_for_kid_confirmation":

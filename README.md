@@ -13,6 +13,7 @@ See [RFC.md](RFC.md) for design + scope.
 - An AgentPhone account with API key + agent + number provisioned
 - OpenAI API key
 - Browser Use API key (for Claude Sonnet 4.6 via their hosted model proxy)
+- Sponge agent API key for payment demos
 - `ngrok` (or any tunneling tool) to expose the local FastAPI to AgentPhone
 
 ---
@@ -38,6 +39,9 @@ AGENT_PHONE_NUMBER_ID=num_...
 AGENT_PHONE_WEBHOOK_SECRET=          # leave empty for dev; signature check is skipped
 OPENAI_API_KEY=sk-...
 BROWSER_USE_API_KEY=bu_...
+SPONGE_API_KEY=sponge_live_...
+PAYMENT_DEMO_SERVICE_NAME=research service
+PAYMENT_DEMO_TARGET=pl_demo_or_url
 ```
 
 If you don't yet have `AGENT_PHONE_AGENT_ID` / `NUMBER_ID`, sign up via the API:
@@ -117,6 +121,12 @@ curl localhost:8000/health      # local
 curl $(cat /tmp/familyops-tunnel-url)/health  # via ngrok
 ```
 
+Sponge readiness check:
+
+```bash
+.venv/bin/python scripts/sponge-status.py
+```
+
 ---
 
 ## Demo
@@ -143,6 +153,22 @@ From the parent phone:
 
 You'll see Chrome open on the demo laptop, Browser Use navigates D2L, then the parent receives a grade summary. The kid simultaneously receives `FYI Jacob just checked your grades.`
 
+### Payment request
+
+From the verified kid phone:
+
+> can you pay $2 for the research service? I need it for homework
+
+The parent receives an approval prompt with a 6-digit code:
+
+> Alex wants $2.00 for research service: 'I need it for homework'. Reply APPROVE 482193 or DECLINE 482193.
+
+From the parent phone:
+
+> approve 482193
+
+FamilyOps records the approval, moves the request through the SQLite payment state machine, and attempts the configured Sponge demo target. If `PAYMENT_DEMO_TARGET` is missing or the Sponge call fails, both parties get a safe failure message and the audit row is marked `failed`.
+
 ---
 
 ## Daily reset
@@ -164,6 +190,8 @@ rm familyops.db
 - **Webhook 401:** either remove `AGENT_PHONE_WEBHOOK_SECRET` from `.env` (dev mode) or make sure it matches what AgentPhone returned.
 - **OpenAI model 404:** `ORCHESTRATOR_MODEL` env var overrides the default. Try `gpt-5.4-mini` or `gpt-5` if `gpt-5.4-nano` isn't available on your account.
 - **AgentPhone send_message 4xx:** check `AGENT_PHONE_AGENT_ID` is correct and the number is attached to the agent.
+- **Payment request becomes manual:** set `PAYMENT_DEMO_SERVICE_NAME` to the exact service phrase the kid will use, and set `PAYMENT_DEMO_TARGET` to the hardcoded Sponge link/id for the demo.
+- **Sponge payment fails before spending:** run `scripts/sponge-status.py` and confirm `SPONGE_API_KEY` is set and the wallet is funded.
 
 ---
 
@@ -176,5 +204,8 @@ rm familyops.db
 | `tools.py` | Tool schemas + dispatcher. `register_family`, `confirm_kid`, `check_d2l_grades`. |
 | `browser_agent.py` | Local `browser_use` Agent + `BrowserSession` + `ChatBrowserUse` for D2L. |
 | `agentphone_client.py` | `send_message` + HMAC signature verification. |
-| `db.py` | SQLite — `families`, `users`. Helpers for sender resolution. |
+| `db.py` | SQLite — `families`, `users`, payment ledger, Sponge wallet ownership. Helpers for sender resolution. |
 | `config.py` | Env var loading, paths, constants. |
+| `payment_service.py` | Deterministic payment request state machine and notification logic. |
+| `sponge_client.py` | Lazy Sponge SDK/REST wrapper with redacted payment metadata. |
+| `scripts/sponge-status.py` | Smoke check for Sponge agent, addresses, and balances. |
