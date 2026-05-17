@@ -859,11 +859,16 @@ async def dispatch_voice_tool(payload: dict) -> dict:
             output = _voice_caller_context(from_number)
 
         elif tool_name == "register_family":
+            # Voice callers are by definition unregistered, so family_id starts None.
+            # _register_family writes the new id back into ctx so any subsequent
+            # tools in the same call would see it.
+            voice_ctx: dict = {"family_id": None}
             output = await _register_family(
                 sender_phone=from_number,
                 parent_name=str(args.get("parent_name", "")).strip(),
                 kid_name=str(args.get("kid_name", "")).strip(),
                 kid_phone=normalize_phone(str(args.get("kid_phone", ""))),
+                ctx=voice_ctx,
             )
 
         elif tool_name == "wait_for_kid_confirmation":
