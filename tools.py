@@ -484,7 +484,7 @@ async def _register_family(
             to_number=kid_phone,
             body=(
                 f"Hi {kid_name}, your parent {parent_name} just registered you with "
-                f"FamilyOps so they can help with school stuff like checking your grades. "
+                f"Riley so they can help with school stuff like checking your grades. "
                 f"Reply YES to confirm this is you."
             ),
         )
