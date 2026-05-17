@@ -35,11 +35,10 @@ async def webhook(
     request: Request,
     background_tasks: BackgroundTasks,
     x_webhook_signature: str = Header(default=""),
-    x_webhook_timestamp: str = Header(default=""),
 ):
     raw = await request.body()
 
-    if not verify_signature(raw, x_webhook_timestamp, x_webhook_signature):
+    if not verify_signature(raw, x_webhook_signature):
         log.warning("Invalid webhook signature")
         raise HTTPException(status_code=401, detail="Invalid signature")
 
