@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+chrome-profile/
+familyops.db
+*.db-journal
+.env
+.DS_Store
