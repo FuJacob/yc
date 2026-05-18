@@ -106,7 +106,7 @@ async def handle_inbound(
     # AgentPhone keeps the full phone conversation, so after a DB reset the
     # stale messages from a previous registration leak old names/state.
     # Unknown senders have no registration time — drop all history for them.
-    history = _filter_history(recent_history or [], user)
+    history = _filter_history(recent_history or [], user, message_text)
     for h in history:
         role = "assistant" if h.get("direction") == "outbound" else "user"
         content = h.get("content") or h.get("body") or h.get("message") or ""
@@ -221,38 +221,69 @@ def _build_context(sender_phone: str) -> str:
     return "\n".join(lines)
 
 
-def _filter_history(history: list[dict], user: dict | None) -> list[dict]:
-    """Only keep history entries timestamped after the user's registration.
+_TS_FIELDS = ("timestamp", "created_at", "date", "sentAt", "sent_at", "createdAt")
 
-    AgentPhone sends the full SMS/iMessage thread, which survives DB resets.
-    Without filtering, the LLM sees old names/state from a prior registration
-    and hallucinates.  Unknown senders get zero history (clean onboarding).
+MAX_HISTORY_FALLBACK = 6
+
+
+def _filter_history(
+    history: list[dict], user: dict | None, current_message: str
+) -> list[dict]:
+    """Return only safe history entries for the LLM.
+
+    - Unknown sender: zero history (clean onboarding slate).
+    - Known sender w/ timestamps: only entries after user's created_at.
+    - Known sender w/o timestamps: last N entries only.
+    - Deduplicates current message if AgentPhone includes it in history.
     """
     if not user:
         return []
 
     created_at = user.get("created_at")
-    if not created_at:
-        return history
-
-    try:
-        cutoff = datetime.fromisoformat(created_at)
-    except (ValueError, TypeError):
-        return history
-
-    filtered = []
-    for h in history:
-        ts_str = h.get("timestamp") or h.get("created_at") or h.get("date") or ""
-        if not ts_str:
-            filtered.append(h)
-            continue
+    cutoff = None
+    if created_at:
         try:
-            ts = datetime.fromisoformat(ts_str)
-            if ts >= cutoff:
-                filtered.append(h)
+            cutoff = datetime.fromisoformat(created_at)
         except (ValueError, TypeError):
-            filtered.append(h)
-    return filtered
+            pass
+
+    if cutoff:
+        filtered = []
+        any_ts_found = False
+        for h in history:
+            ts_str = ""
+            for field in _TS_FIELDS:
+                ts_str = h.get(field) or ""
+                if ts_str:
+                    break
+            if ts_str:
+                any_ts_found = True
+                try:
+                    if datetime.fromisoformat(ts_str) >= cutoff:
+                        filtered.append(h)
+                except (ValueError, TypeError):
+                    pass  # unparseable → exclude (safe default)
+            # no timestamp field → exclude (safe default)
+
+        if any_ts_found:
+            return _deduplicate(filtered, current_message)
+
+    # Fallback: no usable timestamps. Keep only the last N messages.
+    tail = history[-MAX_HISTORY_FALLBACK:]
+    return _deduplicate(tail, current_message)
+
+
+def _deduplicate(history: list[dict], current_message: str) -> list[dict]:
+    """Drop the last history entry if it duplicates the current inbound message."""
+    if not history:
+        return history
+    last = history[-1]
+    last_content = (
+        last.get("content") or last.get("body") or last.get("message") or ""
+    )
+    if last_content.strip() == current_message.strip():
+        return history[:-1]
+    return history
 
 
 def _build_payment_context(family_id: int) -> list[str]:

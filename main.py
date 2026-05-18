@@ -123,6 +123,12 @@ async def _process_inbound(
     recent_history: list,
 ) -> None:
     log.info("Inbound from=%s message=%r", from_number, message_text)
+    if recent_history:
+        log.info(
+            "recentHistory[0] keys=%s entry=%s",
+            list(recent_history[0].keys()),
+            json.dumps(recent_history[0], default=str)[:500],
+        )
 
     try:
         reply, ctx = await handle_inbound(
