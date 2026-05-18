@@ -68,7 +68,7 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  font-family: 'Fraunces', serif;
+  font-family: 'DM Serif Display', serif;
   font-weight: 600;
   font-size: 20px;
   color: var(--ink);
@@ -80,23 +80,13 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
 }
 .logo-mark svg { width: 100%; height: 100%; }
 
-/* Header full-logo: image preferred, inline SVG fallback */
-.logo-full { gap: 0; }
-.logo-img {
-  display: block;
-  height: 44px;
-  width: auto;
-}
-.logo-inline {
-  display: none; /* shown only when image fails to load */
-  align-items: center;
-  gap: 8px;
-}
+/* Header full-logo */
+.logo-full { gap: 8px; }
 .logo-mark-lg {
   width: 38px; height: 38px;
 }
 .logo-word-lg {
-  font-family: 'Fraunces', serif;
+  font-family: 'DM Serif Display', serif;
   font-weight: 600;
   font-size: 28px;
   line-height: 1;
@@ -177,7 +167,7 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
 }
 
 .display {
-  font-family: 'Fraunces', serif;
+  font-family: 'DM Serif Display', serif;
   font-weight: 600;
   font-size: clamp(48px, 8.5vw, 108px);
   line-height: 0.96;
@@ -503,7 +493,7 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
   gap: 28px;
   white-space: nowrap;
   animation: scroll 50s linear infinite;
-  font-family: 'Fraunces', serif;
+  font-family: 'DM Serif Display', serif;
   font-size: 22px;
   color: var(--ink-soft);
   font-weight: 500;
@@ -534,7 +524,7 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
   gap: 36px;
 }
 .logo-row .brand {
-  font-family: 'Fraunces', serif;
+  font-family: 'DM Serif Display', serif;
   font-size: 20px;
   font-weight: 500;
   color: var(--ink);
@@ -559,7 +549,7 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
 .kicker.light { color: rgba(255,255,255,0.8); }
 
 .h2 {
-  font-family: 'Fraunces', serif;
+  font-family: 'DM Serif Display', serif;
   font-weight: 600;
   font-size: clamp(36px, 5.5vw, 64px);
   line-height: 1.02;
@@ -586,7 +576,7 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
   font-size: 22px;
   color: var(--ink);
   font-weight: 500;
-  font-family: 'Fraunces', serif;
+  font-family: 'DM Serif Display', serif;
   font-style: italic;
 }
 
@@ -617,7 +607,7 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
 }
 .feat-icon svg { width: 22px; height: 22px; }
 .feat h3 {
-  font-family: 'Fraunces', serif;
+  font-family: 'DM Serif Display', serif;
   font-weight: 600;
   font-size: 24px;
   margin: 0 0 10px;
@@ -669,7 +659,7 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
 }
 .step:last-child { border-right: none; }
 .step-num {
-  font-family: 'Fraunces', serif;
+  font-family: 'DM Serif Display', serif;
   font-size: 44px;
   font-weight: 600;
   color: var(--coral);
@@ -677,7 +667,7 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
   margin-bottom: 18px;
 }
 .step h3 {
-  font-family: 'Fraunces', serif;
+  font-family: 'DM Serif Display', serif;
   font-weight: 600;
   font-size: 22px;
   margin: 0 0 10px;
@@ -702,7 +692,7 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
 }
 .stars { color: var(--sun); margin-bottom: 12px; letter-spacing: 2px; font-size: 14px; }
 .review p {
-  font-family: 'Fraunces', serif;
+  font-family: 'DM Serif Display', serif;
   font-size: 17px;
   margin: 0 0 20px;
   color: var(--ink);
@@ -859,7 +849,7 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
 }
 .faq-list details[open] { background: white; box-shadow: var(--shadow-sm); }
 .faq-list summary {
-  font-family: 'Fraunces', serif;
+  font-family: 'DM Serif Display', serif;
   font-weight: 600;
   font-size: 19px;
   cursor: pointer;

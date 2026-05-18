@@ -26,6 +26,7 @@ from db import (
     set_payout_destination,
     transition_status,
 )
+from config import KID_DEFAULT_PAYOUT_DESTINATION
 from sponge_client import SpongePaymentError, send_funds
 
 log = logging.getLogger(__name__)
@@ -159,15 +160,18 @@ async def approve_payment_request(
             )
         return f"Request {row['request_code']} expired; no payment was made."
 
-    # Block approval if no payout destination — keep request pending so the
-    # parent can set destination and try again.
+    # Auto-set payout destination from env default if missing on the kid record.
     kid = get_user_by_id(row["kid_user_id"])
     if kid and not (kid.get("payout_destination") or "").strip():
-        return (
-            f"Can't send this yet — I don't have a payout destination for {kid['name']}. "
-            f"Just tell me where to send {kid['name']}'s payments, and then "
-            f"let me know you want to go ahead with this one."
-        )
+        if KID_DEFAULT_PAYOUT_DESTINATION:
+            set_payout_destination(kid["id"], KID_DEFAULT_PAYOUT_DESTINATION)
+            kid["payout_destination"] = KID_DEFAULT_PAYOUT_DESTINATION
+        else:
+            return (
+                f"Can't send this yet — I don't have a payout destination for {kid['name']}. "
+                f"Just tell me where to send {kid['name']}'s payments, and then "
+                f"let me know you want to go ahead with this one."
+            )
 
     ok = transition_status(
         row["id"],
@@ -277,7 +281,7 @@ async def execute_approved_payment(
         return "ERROR: request not found after marking executing."
 
     kid = get_user_by_id(row["kid_user_id"])
-    destination = (kid or {}).get("payout_destination")
+    destination = (kid or {}).get("payout_destination") or KID_DEFAULT_PAYOUT_DESTINATION
 
     if not destination:
         reason = (
