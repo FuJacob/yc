@@ -184,7 +184,7 @@ Kid texts: "tell dad i'll be late" — parent gets the message via Riley.
 
 ## Sponsor Tech Stack
 
-Riley uses **6 sponsor technologies** in a single end-to-end flow — not as checkboxes, but because each one solves a real problem in the architecture.
+Riley uses **5 sponsor technologies** in a single end-to-end flow — not as checkboxes, but because each one solves a real problem in the architecture.
 
 ### AgentPhone — the backbone
 
@@ -202,13 +202,9 @@ When a kid asks to pay for something, we need actual money to move. Sponge handl
 
 Without memory, every conversation starts from zero. Supermemory gives Riley semantic search across past interactions — grade snapshots, family preferences, school info. When a parent asks "how is Gaby doing compared to last time?", Riley can pull the previous grade check from memory and compare. One API for store, one for search, scoped per family via container tags.
 
-### Google DeepMind (Gemini) — orchestrator intelligence
+### OpenAI — orchestrator
 
-The orchestrator model drives every decision: which tool to call, what to say, how to interpret natural language like "yeah go ahead" as payment approval. It runs the full tool-calling loop — register, verify, check grades, send payments, remember facts — all from a single system prompt.
-
-### OpenAI — orchestrator backbone
-
-GPT-5.4-nano runs the core tool-calling loop. Fast enough for real-time SMS conversations, smart enough to handle multi-step flows (register → verify → check grades → send message to kid) without hand-holding.
+GPT-5.4-nano runs the core tool-calling loop. Every decision — which tool to call, what to say, how to interpret "yeah go ahead" as payment approval — comes from a single system prompt with 10 tools. Fast enough for real-time SMS, smart enough to handle multi-step flows without hand-holding.
 
 ---
 
