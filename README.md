@@ -100,3 +100,7 @@ That's it. Text the AgentPhone number and go.
 **No reply from Riley?** Check `scripts/status.sh`. AgentPhone might be down.
 **Payment failed?** Run `scripts/sponge-status.py` to check wallet balance.
 **Browser timing out?** Set `BROWSER_TIMEOUT_SECONDS=240` in `.env`.
+
+---
+
+Thanks for reading this!
