@@ -285,6 +285,28 @@ TOOL_SCHEMAS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "send_message_to_kid",
+            "description": (
+                "Send a text message to the kid on behalf of the parent. "
+                "Only a VERIFIED parent can use this. Compose the message "
+                "naturally based on what the parent asked you to say."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "message": {
+                        "type": "string",
+                        "description": "The message to send to the kid.",
+                    }
+                },
+                "required": ["message"],
+                "additionalProperties": False,
+            },
+        },
+    },
 ]
 
 
@@ -387,6 +409,12 @@ async def dispatch_tool(
         return await get_payment_request_status(
             sender_phone=sender_phone,
             request_code=str(args.get("request_code") or "").strip() or None,
+        )
+
+    if name == "send_message_to_kid":
+        return await _send_message_to_kid(
+            sender_phone=sender_phone,
+            message=str(args.get("message", "")).strip(),
         )
 
     return f"ERROR: unknown tool '{name}'"
@@ -603,6 +631,30 @@ async def _dispatch_check_grades(sender_phone: str, student_name: str, ctx: dict
     if live_view_url:
         return f"LIVE VIEW: {live_view_url}\n\n{result}"
     return result
+
+
+async def _send_message_to_kid(*, sender_phone: str, message: str) -> str:
+    if not message:
+        return "ERROR: message is empty."
+    parent = get_user_by_phone(sender_phone)
+    if not parent:
+        return "ERROR: sender is not registered."
+    if parent["role"] != "parent":
+        return "ERROR: only a parent can send messages to the kid."
+    if parent["onboarding_state"] != "verified":
+        return "ERROR: parent is not verified yet."
+    kid = get_kid_for_parent(parent["id"])
+    if not kid:
+        return "ERROR: no kid registered for this parent."
+    try:
+        await send_message(
+            to_number=kid["phone"],
+            body=f"From {parent['name']} via Riley: {message}",
+        )
+    except Exception as e:
+        log.exception("Failed to send message to kid")
+        return f"ERROR: couldn't send the message: {e}"
+    return f"Sent to {kid['name']}."
 
 
 def normalize_phone(phone: str) -> str:
