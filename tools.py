@@ -117,61 +117,7 @@ TOOL_SCHEMAS = [
             },
         },
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "remember_fact",
-            "description": (
-                "Store a durable fact about this family for future conversations. "
-                "Use when the user shares info worth remembering: school/program, "
-                "current courses, tutors, recurring schedules, preferences, etc. "
-                "Do NOT use for ephemeral things ('I'm tired today')."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "content": {
-                        "type": "string",
-                        "description": "The fact to remember, written as a complete sentence.",
-                    },
-                    "category": {
-                        "type": "string",
-                        "enum": ["school_info", "preference", "relationship", "approval", "other"],
-                        "description": "What kind of fact this is.",
-                    },
-                    "kid_name": {
-                        "type": "string",
-                        "description": "Name of the kid this fact is about, if any. Omit if the fact is about the parent or family as a whole.",
-                    },
-                },
-                "required": ["content", "category"],
-                "additionalProperties": False,
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "recall",
-            "description": (
-                "Search memories for past facts about this family. Use when the user "
-                "asks about something you might have heard before ('what's his tutor "
-                "schedule?', 'anything you remember about Gabe?'). Returns a list of "
-                "matching memories or an empty result."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "Short natural-language description of what to look up.",
-                    }
-                },
-                "required": ["query"],
-                "additionalProperties": False,
-            },
-        },
-    },
+    # remember_fact and recall schemas removed — Supermemory disabled.
     {
         "type": "function",
         "function": {
@@ -307,6 +253,28 @@ TOOL_SCHEMAS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "send_message_to_parent",
+            "description": (
+                "Send a text message to the parent on behalf of the kid. "
+                "Only a VERIFIED kid can use this. Compose the message "
+                "naturally based on what the kid asked you to say."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "message": {
+                        "type": "string",
+                        "description": "The message to send to the parent.",
+                    }
+                },
+                "required": ["message"],
+                "additionalProperties": False,
+            },
+        },
+    },
 ]
 
 
@@ -393,6 +361,12 @@ async def dispatch_tool(
 
     if name == "send_message_to_kid":
         return await _send_message_to_kid(
+            sender_phone=sender_phone,
+            message=str(args.get("message", "")).strip(),
+        )
+
+    if name == "send_message_to_parent":
+        return await _send_message_to_parent(
             sender_phone=sender_phone,
             message=str(args.get("message", "")).strip(),
         )
@@ -621,6 +595,30 @@ async def _send_message_to_kid(*, sender_phone: str, message: str) -> str:
         log.exception("Failed to send message to kid")
         return f"ERROR: couldn't send the message: {e}"
     return f"Sent to {kid['name']}."
+
+
+async def _send_message_to_parent(*, sender_phone: str, message: str) -> str:
+    if not message:
+        return "ERROR: message is empty."
+    kid = get_user_by_phone(sender_phone)
+    if not kid:
+        return "ERROR: sender is not registered."
+    if kid["role"] != "kid":
+        return "ERROR: only a kid can send messages to the parent."
+    if kid["onboarding_state"] != "verified":
+        return "ERROR: kid is not verified yet."
+    parent = get_parent_for_kid(kid["id"])
+    if not parent:
+        return "ERROR: no parent registered for this kid."
+    try:
+        await send_message(
+            to_number=parent["phone"],
+            body=f"From {kid['name']} via Riley: {message}",
+        )
+    except Exception as e:
+        log.exception("Failed to send message to parent")
+        return f"ERROR: couldn't send the message: {e}"
+    return f"Sent to {parent['name']}."
 
 
 def normalize_phone(phone: str) -> str:
