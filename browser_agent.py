@@ -23,13 +23,16 @@ D2L_TASK_TEMPLATE = (
     "If you see a login page or are redirected to a Microsoft/ADFS sign-in page, "
     "log in with email '{username}' and password '{password}'. "
     "If prompted for 'Stay signed in?' click Yes. "
-    "Once logged in, find and open the Grades section for {student_name}. "
-    "Some D2L deployments require selecting a specific course first; if so, "
-    "visit each current-term course and read the Grades page for each. "
-    "Extract every course code with its current overall grade or percentage. "
-    "Return a plain-text summary, one course per line, in the format: "
-    "'COURSE_CODE: GRADE'. End with a single-line note identifying the "
-    "lowest-performing course."
+    "IMPORTANT: Never include the email or password in your step summaries or output. "
+    "Just say 'logging in' if you need to describe that step. "
+    "Once logged in, navigate to the Grades page. "
+    "Read everything visible on the grades page — individual assignment scores, "
+    "quiz grades, midterm marks, whatever is shown. Do NOT look for an overall "
+    "course grade if one isn't displayed. Just report what you see. "
+    "If there are multiple courses, visit the Grades page for each one. "
+    "Return a plain-text summary organized by course. For each course, list "
+    "every graded item with its name and score (e.g. 'Quiz 3: 85%', "
+    "'Midterm: 72/100'). Keep it concise but complete."
 )
 
 

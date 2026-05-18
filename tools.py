@@ -527,17 +527,32 @@ async def _dispatch_check_grades(sender_phone: str, student_name: str, ctx: dict
         except Exception:
             log.exception("Failed to send live link")
 
-    # 5. Stream steps as iMessages
+    # 5. Stream steps as iMessages — filter out anything with credentials
     steps_sent = 0
+    _sensitive = {
+        v.lower()
+        for v in (
+            __import__("config").D2L_USERNAME,
+            __import__("config").D2L_PASSWORD,
+        )
+        if v
+    }
+
+    def _is_safe(text: str) -> bool:
+        lower = text.lower()
+        return not any(secret in lower for secret in _sensitive)
 
     async def on_step(summary: str):
         nonlocal steps_sent
-        if steps_sent < MAX_STEP_MESSAGES:
-            try:
-                await send_message(to_number=sender_phone, body=summary)
-                steps_sent += 1
-            except Exception:
-                log.exception("Failed to send step update")
+        if steps_sent >= MAX_STEP_MESSAGES:
+            return
+        if not _is_safe(summary):
+            summary = "Logging in..."
+        try:
+            await send_message(to_number=sender_phone, body=summary)
+            steps_sent += 1
+        except Exception:
+            log.exception("Failed to send step update")
 
     # 5. Block until done, streaming intermediate steps via on_step.
     result = await stream_until_done(
