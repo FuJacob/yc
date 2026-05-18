@@ -21,6 +21,24 @@ class SpongePaymentError(RuntimeError):
     """User-safe Sponge execution failure."""
 
 
+def validate_payout_destination(
+    destination: str | None, *, chain: str | None = None
+) -> str | None:
+    """Return a user-safe validation error for obviously invalid destinations."""
+    value = (destination or "").strip()
+    if not value:
+        return "No payout destination is set for the kid."
+    if value.startswith(("sponge_live_", "sponge_test_", "sk_live_", "sk_test_")):
+        return (
+            "Payout destination is configured with an API key, not a recipient. "
+            "Set KID_DEFAULT_PAYOUT_DESTINATION or PAYMENT_DEMO_TARGET to the kid's "
+            "wallet address, Sponge handle, or payment target."
+        )
+    if (chain or "").lower() == "solana" and value.startswith("0x"):
+        return "Solana payments need a Solana recipient address, not an EVM 0x address."
+    return None
+
+
 def _wallet():
     if not SPONGE_API_KEY:
         raise SpongePaymentError("Sponge is not configured: missing SPONGE_API_KEY.")
@@ -54,8 +72,9 @@ def send_funds(
     Returns a dict with at least `reference` and `status`. Raises
     SpongePaymentError with a user-safe message on failure.
     """
-    if not to:
-        raise SpongePaymentError("No payout destination is set for the kid.")
+    validation_error = validate_payout_destination(to, chain=PAYMENT_DEFAULT_CHAIN)
+    if validation_error:
+        raise SpongePaymentError(validation_error)
     if amount_cents <= 0:
         raise SpongePaymentError("Amount must be positive.")
 
@@ -111,12 +130,23 @@ def _status_from(result: Any) -> str | None:
 
 
 def _to_jsonable(value: Any) -> Any:
-    sensitive = ("secret", "token", "cvc", "pan", "card_number", "api_key")
+    sensitive_keys = {
+        "access_token",
+        "api_key",
+        "bearer_token",
+        "card_number",
+        "cvc",
+        "id_token",
+        "pan",
+        "private_key",
+        "refresh_token",
+        "secret",
+    }
     if isinstance(value, dict):
         out = {}
         for k, v in value.items():
             ks = str(k)
-            if any(s in ks.lower() for s in sensitive):
+            if ks.lower() in sensitive_keys:
                 out[ks] = "[redacted]"
             else:
                 out[ks] = _to_jsonable(v)

@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
@@ -9,13 +10,16 @@ from openai import AsyncOpenAI
 from agentphone_client import send_message
 from config import MAX_TOOL_CALLS, OPENAI_API_KEY, ORCHESTRATOR_MODEL
 from db import (
+    delete_onboarding_session,
     get_active_payment_requests_for_family,
     get_kid_for_parent,
+    get_onboarding_session,
     get_parent_for_kid,
     get_user_by_phone,
+    save_onboarding_session,
 )
 import memory
-from tools import TOOL_SCHEMAS, dispatch_tool
+from tools import TOOL_SCHEMAS, dispatch_tool, normalize_phone
 
 log = logging.getLogger(__name__)
 
@@ -83,6 +87,15 @@ async def handle_inbound(
         "family_id": family_id,
         "live_sessions": live_sessions,
     }
+
+    if not user:
+        reply = await _handle_unknown_sender_onboarding(
+            sender_phone=sender_phone,
+            message_text=message_text,
+            ctx=ctx,
+        )
+        if reply is not None:
+            return reply, ctx
 
     # Fire recall + build the DB context block. Both run in parallel —
     # memory.recall has its own timeout + always returns [] on error.
@@ -183,6 +196,170 @@ async def handle_inbound(
 
     log.warning("Hit MAX_TOOL_CALLS without final response")
     return "Sorry, I got stuck. Try again?", ctx
+
+
+async def _handle_unknown_sender_onboarding(
+    *, sender_phone: str, message_text: str, ctx: dict
+) -> Optional[str]:
+    """Collect onboarding fields for a sender before invoking the LLM.
+
+    The orchestrator prompt asks one onboarding question at a time, but the LLM
+    cannot reliably know which question it asked after we intentionally discard
+    AgentPhone history for unknown senders. Persisting partial answers gives the
+    product a durable state machine while still letting `register_family` own the
+    validation and side effects.
+    """
+    session = get_onboarding_session(sender_phone) or {}
+    answers = {
+        "parent_name": session.get("parent_name"),
+        "kid_name": session.get("kid_name"),
+        "kid_phone": session.get("kid_phone"),
+    }
+
+    extracted = _extract_onboarding_values(message_text, answers)
+    for key, value in extracted.items():
+        if value and not answers.get(key):
+            answers[key] = value
+
+    if all(answers.values()):
+        result = await dispatch_tool(
+            "register_family",
+            {
+                "parent_name": answers["parent_name"],
+                "kid_name": answers["kid_name"],
+                "kid_phone": answers["kid_phone"],
+            },
+            sender_phone=sender_phone,
+            ctx=ctx,
+        )
+
+        if result.startswith("ERROR:"):
+            if "kid's phone number can't be the same" in result:
+                answers["kid_phone"] = None
+                _save_onboarding_answers(sender_phone, answers)
+                return "That looks like your number. What's your kid's phone number?"
+            _save_onboarding_answers(sender_phone, answers)
+            return result.removeprefix("ERROR: ").strip()
+
+        delete_onboarding_session(sender_phone)
+        return (
+            f"Got it — I registered you and texted {answers['kid_name']} to confirm. "
+            "Once they reply, you're all set."
+        )
+
+    _save_onboarding_answers(sender_phone, answers)
+    return _next_onboarding_question(answers)
+
+
+def _save_onboarding_answers(sender_phone: str, answers: dict[str, Optional[str]]) -> None:
+    """Persist the current partial onboarding answers for this sender."""
+    save_onboarding_session(
+        phone=sender_phone,
+        parent_name=answers.get("parent_name"),
+        kid_name=answers.get("kid_name"),
+        kid_phone=answers.get("kid_phone"),
+    )
+
+
+_NAME_TOKEN = r"[A-Za-z][A-Za-z'-]{1,30}"
+_PHONE_RE = re.compile(r"(?:\+?\d[\d\s().-]{7,}\d)")
+_STOPWORD_NAMES = {
+    "approve", "cookie", "grade", "grades", "hello", "hey", "hi", "no", "ok",
+    "okay", "please", "request", "thanks", "yes",
+}
+
+
+def _extract_onboarding_values(
+    message_text: str, current_answers: dict[str, Optional[str]]
+) -> dict[str, str]:
+    """Extract parent name, kid name, and kid phone from an onboarding message."""
+    extracted: dict[str, str] = {}
+
+    phone = _extract_phone(message_text)
+    if phone:
+        extracted["kid_phone"] = phone
+
+    parent_name = _extract_parent_name(message_text)
+    if parent_name:
+        extracted["parent_name"] = parent_name
+
+    kid_name = _extract_kid_name(message_text)
+    if kid_name:
+        extracted["kid_name"] = kid_name
+
+    simple_name = _extract_simple_name_reply(message_text)
+    if simple_name:
+        if not current_answers.get("parent_name") and "parent_name" not in extracted:
+            extracted["parent_name"] = simple_name
+        elif not current_answers.get("kid_name") and "kid_name" not in extracted:
+            extracted["kid_name"] = simple_name
+
+    return extracted
+
+
+def _extract_phone(message_text: str) -> Optional[str]:
+    """Return a normalized North American phone number if one is present."""
+    match = _PHONE_RE.search(message_text)
+    if not match:
+        return None
+    phone = normalize_phone(match.group(0))
+    if re.fullmatch(r"\+\d{10,15}", phone):
+        return phone
+    return None
+
+
+def _extract_parent_name(message_text: str) -> Optional[str]:
+    """Extract the parent's first name from common self-introduction phrases."""
+    patterns = [
+        rf"\b(?:i(?:'m| am)|my name is|this is|it(?:'s|s)|i said it(?:'s|s))\s+({_NAME_TOKEN})\b",
+    ]
+    return _first_name_match(message_text, patterns)
+
+
+def _extract_kid_name(message_text: str) -> Optional[str]:
+    """Extract the kid's first name from common registration phrases."""
+    patterns = [
+        rf"\b(?:my\s+)?(?:kid|child|son|daughter)(?:'s name is| is| named)?\s+({_NAME_TOKEN})\b",
+        rf"\bregister\s+(?:my\s+)?(?:kid|child|son|daughter)?\s*({_NAME_TOKEN})\b",
+    ]
+    return _first_name_match(message_text, patterns)
+
+
+def _extract_simple_name_reply(message_text: str) -> Optional[str]:
+    """Treat a short one-name message as an answer to the active prompt."""
+    cleaned = message_text.strip().strip(".!,?;:")
+    if not re.fullmatch(_NAME_TOKEN, cleaned):
+        return None
+    return _clean_name(cleaned)
+
+
+def _first_name_match(message_text: str, patterns: list[str]) -> Optional[str]:
+    """Return the first plausible name captured by one of the regex patterns."""
+    normalized_text = message_text.replace("’", "'").replace("‘", "'")
+    for pattern in patterns:
+        match = re.search(pattern, normalized_text, flags=re.IGNORECASE)
+        if match:
+            name = _clean_name(match.group(1))
+            if name:
+                return name
+    return None
+
+
+def _clean_name(name: str) -> Optional[str]:
+    """Normalize a captured first name and reject obvious non-name replies."""
+    cleaned = name.strip(" .,!?:;\"'").lower()
+    if cleaned in _STOPWORD_NAMES:
+        return None
+    return cleaned[:1].upper() + cleaned[1:]
+
+
+def _next_onboarding_question(answers: dict[str, Optional[str]]) -> str:
+    """Ask for the next missing onboarding field."""
+    if not answers.get("parent_name"):
+        return "Hi! What's your first name?"
+    if not answers.get("kid_name"):
+        return "Nice to meet you — what's your kid's first name?"
+    return "What's your kid's phone number?"
 
 
 def _build_context(sender_phone: str) -> str:

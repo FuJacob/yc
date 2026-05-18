@@ -26,8 +26,8 @@ from db import (
     set_payout_destination,
     transition_status,
 )
-from config import KID_DEFAULT_PAYOUT_DESTINATION
-from sponge_client import SpongePaymentError, send_funds
+from config import KID_DEFAULT_PAYOUT_DESTINATION, PAYMENT_DEFAULT_CHAIN
+from sponge_client import SpongePaymentError, send_funds, validate_payout_destination
 
 log = logging.getLogger(__name__)
 
@@ -131,13 +131,20 @@ async def approve_payment_request(
     kid = get_user_by_id(row["kid_user_id"])
     if kid and not (kid.get("payout_destination") or "").strip():
         if KID_DEFAULT_PAYOUT_DESTINATION:
-            set_payout_destination(kid["id"], KID_DEFAULT_PAYOUT_DESTINATION)
-            kid["payout_destination"] = KID_DEFAULT_PAYOUT_DESTINATION
+            validation_error = validate_payout_destination(
+                KID_DEFAULT_PAYOUT_DESTINATION,
+                chain=PAYMENT_DEFAULT_CHAIN,
+            )
+            if validation_error:
+                return f"Can't send this yet - {validation_error}"
+            default_destination = KID_DEFAULT_PAYOUT_DESTINATION.strip()
+            set_payout_destination(kid["id"], default_destination)
+            kid["payout_destination"] = default_destination
         else:
             return (
-                f"Can't send this yet — I don't have a payout destination for {kid['name']}. "
-                f"Just tell me where to send {kid['name']}'s payments, and then "
-                f"let me know you want to go ahead with this one."
+                f"Can't send this yet - I don't have a payout destination for {kid['name']}. "
+                "Set KID_DEFAULT_PAYOUT_DESTINATION or PAYMENT_DEMO_TARGET to a real "
+                "recipient, restart, then approve again."
             )
 
     ok = transition_status(
@@ -248,12 +255,15 @@ async def execute_approved_payment(
         return "ERROR: request not found after marking executing."
 
     kid = get_user_by_id(row["kid_user_id"])
-    destination = (kid or {}).get("payout_destination") or KID_DEFAULT_PAYOUT_DESTINATION
+    destination = ((kid or {}).get("payout_destination") or KID_DEFAULT_PAYOUT_DESTINATION).strip()
 
-    if not destination:
+    validation_error = validate_payout_destination(
+        destination,
+        chain=PAYMENT_DEFAULT_CHAIN,
+    )
+    if validation_error:
         reason = (
-            f"No payout destination set for {kid['name'] if kid else 'the kid'}. "
-            f"Parent: text me 'set payout to <destination>' to configure it."
+            f"{validation_error} Update the env var, restart, and create a new request."
         )
         transition_status(
             req_id,

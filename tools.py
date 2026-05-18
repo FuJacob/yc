@@ -6,6 +6,7 @@ from agentphone_client import send_message
 from browser_agent import check_d2l_grades, create_d2l_session, stream_until_done
 from config import (
     KID_DEFAULT_PAYOUT_DESTINATION,
+    PAYMENT_DEFAULT_CHAIN,
     PUBLIC_URL,
 )
 from db import (
@@ -24,6 +25,7 @@ from payment_service import (
     decline_payment_request,
     get_payment_request_status,
 )
+from sponge_client import validate_payout_destination
 
 
 # Names the LLM sometimes invents when the user hasn't actually given one.
@@ -435,7 +437,11 @@ async def _register_family(
 
     # Auto-set kid's payout destination if configured in env.
     if KID_DEFAULT_PAYOUT_DESTINATION:
-        set_payout_destination(kid_id, KID_DEFAULT_PAYOUT_DESTINATION)
+        if not validate_payout_destination(
+            KID_DEFAULT_PAYOUT_DESTINATION,
+            chain=PAYMENT_DEFAULT_CHAIN,
+        ):
+            set_payout_destination(kid_id, KID_DEFAULT_PAYOUT_DESTINATION.strip())
 
     # Seed an initial family memory (no-op if Supermemory disabled).
     from datetime import datetime, timezone

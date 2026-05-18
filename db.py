@@ -26,6 +26,15 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE INDEX IF NOT EXISTS idx_users_family ON users(family_id);
 
+CREATE TABLE IF NOT EXISTS onboarding_sessions (
+    phone TEXT PRIMARY KEY,
+    parent_name TEXT,
+    kid_name TEXT,
+    kid_phone TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS payment_requests (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     family_id INTEGER NOT NULL REFERENCES families(id),
@@ -108,6 +117,47 @@ def get_user_by_id(user_id: int) -> Optional[dict]:
             "SELECT * FROM users WHERE id = ?", (user_id,)
         ).fetchone()
         return dict(row) if row else None
+
+
+def get_onboarding_session(phone: str) -> Optional[dict]:
+    """Return the in-progress onboarding answers for an unknown sender."""
+    with connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM onboarding_sessions WHERE phone = ?", (phone,)
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def save_onboarding_session(
+    *,
+    phone: str,
+    parent_name: Optional[str] = None,
+    kid_name: Optional[str] = None,
+    kid_phone: Optional[str] = None,
+) -> None:
+    """Create or update a partial onboarding session for a phone number."""
+    ts = now_iso()
+    with connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO onboarding_sessions (
+                phone, parent_name, kid_name, kid_phone, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(phone) DO UPDATE SET
+                parent_name = excluded.parent_name,
+                kid_name = excluded.kid_name,
+                kid_phone = excluded.kid_phone,
+                updated_at = excluded.updated_at
+            """,
+            (phone, parent_name, kid_name, kid_phone, ts, ts),
+        )
+
+
+def delete_onboarding_session(phone: str) -> None:
+    """Clear any partial onboarding state for a phone number."""
+    with connect() as conn:
+        conn.execute("DELETE FROM onboarding_sessions WHERE phone = ?", (phone,))
 
 
 def get_kid_for_parent(parent_id: int) -> Optional[dict]:
