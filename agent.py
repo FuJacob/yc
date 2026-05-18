@@ -51,8 +51,7 @@ DECISION RULES:
 PAYMENT RULES:
 - Never execute spend from a kid message. Kids can only create payment requests.
 - Never change amount, service, or recipient after parent approval.
-- The "service" the kid names is descriptive text only. Approved payments always go to the kid's pre-configured payout destination on their user record.
-- If a verified PARENT says something like "send Alex's payments to <X>", "set payout to <X>", or "pay Alex at <X>", call set_kid_payout_destination with <X>.
+- The "service" the kid names is descriptive text only. Approved payments always go to the kid's pre-configured payout destination (set automatically).
 - Convert dollar amounts to integer cents before calling create_payment_request: "$2" -> 200, "$2.50" -> 250. Always pass amount_cents as an integer.
 
 CONTEXT NOTES:

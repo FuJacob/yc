@@ -37,30 +37,6 @@ log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-async def set_kid_payout_destination(
-    *, sender_phone: str, destination: str
-) -> str:
-    parent = _require_verified(sender_phone, role="parent")
-    if isinstance(parent, str):
-        return parent
-
-    from db import get_kid_for_parent
-
-    kid_user = get_kid_for_parent(parent["id"])
-    if not kid_user:
-        return "ERROR: no kid is registered for this parent."
-
-    destination = (destination or "").strip()
-    if not destination:
-        return "ERROR: destination is required."
-
-    set_payout_destination(kid_user["id"], destination)
-    return (
-        f"Set {kid_user['name']}'s payout destination. "
-        f"Future approved payments will go to: {destination}"
-    )
-
-
 async def create_payment_request(
     *,
     sender_phone: str,
@@ -98,18 +74,9 @@ async def create_payment_request(
 
     amount_str = _format_money(amount_cents, currency)
     reason_clause = f": '{reason}'" if reason else ""
-    needs_destination = not (kid.get("payout_destination") or "").strip()
-    destination_note = (
-        f" Heads up: I don't have a payout destination for {kid['name']} yet — "
-        f"just tell me where to send {kid['name']}'s payments and then "
-        f"let me know you're good with this one."
-        if needs_destination
-        else ""
-    )
     parent_msg = (
         f"{kid['name']} wants {amount_str} for {service_name}{reason_clause}. "
         f"Want to go ahead? Just say yes or no (ref: {req['request_code']})."
-        f"{destination_note}"
     )
     try:
         await send_message(parent["phone"], parent_msg)

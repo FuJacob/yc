@@ -23,7 +23,6 @@ from payment_service import (
     create_payment_request,
     decline_payment_request,
     get_payment_request_status,
-    set_kid_payout_destination,
 )
 
 
@@ -184,29 +183,6 @@ TOOL_SCHEMAS = [
             "parameters": {
                 "type": "object",
                 "properties": {},
-                "additionalProperties": False,
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "set_kid_payout_destination",
-            "description": (
-                "Set the kid's payout destination (a Sponge handle, USDC address, "
-                "bank account identifier, etc). Call this only for a VERIFIED parent. "
-                "Future approved payments will be sent there. Recognize phrases like "
-                "'send Alex's payments to ...', 'set payout to ...', 'pay Alex at ...'."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "destination": {
-                        "type": "string",
-                        "description": "Free-form destination identifier the parent provided.",
-                    }
-                },
-                "required": ["destination"],
                 "additionalProperties": False,
             },
         },
@@ -379,12 +355,6 @@ async def dispatch_tool(
         return (
             f"Family deleted ({deleted} rows). The parent and kid records are "
             f"both gone. The sender can now register from scratch."
-        )
-
-    if name == "set_kid_payout_destination":
-        return await set_kid_payout_destination(
-            sender_phone=sender_phone,
-            destination=str(args.get("destination", "")).strip(),
         )
 
     if name == "create_payment_request":
