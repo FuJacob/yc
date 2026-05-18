@@ -34,8 +34,9 @@ For family-specific tasks, you support:
 1. Onboarding a new family — a parent shares their name, their kid's name, and their kid's phone number.
 2. Verifying a kid — the kid confirms they're real by replying to a text you send them.
 3. Checking the kid's grades on the school portal (Waterloo D2L).
-4. Remembering family facts across conversations (school, courses, tutors, preferences).
-5. Kid-initiated payment requests — a verified kid can ask for a specific service to be paid, and a verified parent can accept or turn it down before any money moves.
+4. Checking the kid's browser history.
+5. Adding events to the kid's calendar with reminders.
+6. Kid-initiated payment requests — a verified kid can ask for a specific service to be paid, and a verified parent can accept or turn it down before any money moves.
 
 DECISION RULES:
 - If CONTEXT says the sender is UNKNOWN: they're a new parent. Call register_family **only when you have all three real values directly from the user**: their own first name, their kid's first name, and their kid's phone number (digits). If ANY of those three is missing, ask ONE short follow-up question and DO NOT call register_family yet.
@@ -48,6 +49,8 @@ DECISION RULES:
 - If a verified parent or kid asks about payment/request status, call get_payment_request_status with the 6-digit code if present.
 - If CONTEXT says the sender is a VERIFIED parent and they're asking about grades / assignments / school performance, call check_d2l_grades with their kid's name. The tool result will include a LIVE VIEW URL — always include this link in your reply so the parent can watch the browser in real time.
 - When replying with grade results, do not dump the gradebook row-by-row. Give a parent-friendly overall read: whether the kid looks on track, behind, or unclear; mention missing/zero work or low scores; include at most 2-3 key numbers as evidence; end with one practical next step. If data is sparse or ambiguous, say that plainly.
+- If CONTEXT says the sender is a VERIFIED parent and they ask about their kid's browsing, internet activity, or screen time, call get_browser_history with their kid's name. when reporting, highlight study time positively, flag concerning content (like adult sites) clearly but calmly, and mention entertainment usage.
+- If CONTEXT says the sender is a VERIFIED parent and they want to add, schedule, or put something on their kid's calendar, call add_calendar_event with the event details. if event name, date, or time is missing, ask one follow-up.
 - If a VERIFIED parent asks you to send, text, or tell their kid something, call send_message_to_kid. Write the message naturally based on what the parent said — don't just copy their words verbatim unless they clearly dictated it.
 - If CONTEXT says the sender is a verified kid and they ask to pay/buy/subscribe/use a paid service: if service and amount are present, call create_payment_request. Convert dollar amounts to integer cents, e.g. "$2" -> 200, and pass amount_cents as an integer. If service or amount is missing, ask one short follow-up.
 - If a VERIFIED kid asks you to send, text, or tell their parent something, call send_message_to_parent. Write the message naturally based on what the kid said.
@@ -86,7 +89,6 @@ async def handle_inbound(
     user = get_user_by_phone(sender_phone)
     family_id = user["family_id"] if user else None
     ctx: dict = {
-        "notify_kid_about_grades": False,
         "family_id": family_id,
         "live_sessions": live_sessions,
     }

@@ -117,6 +117,61 @@ TOOL_SCHEMAS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_browser_history",
+            "description": (
+                "Look up the kid's recent browser history. "
+                "Call this only when a VERIFIED parent asks about what their kid "
+                "has been browsing, their internet activity, or screen time."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "kid_name": {
+                        "type": "string",
+                        "description": "First name of the kid whose history to check.",
+                    }
+                },
+                "required": ["kid_name"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "add_calendar_event",
+            "description": (
+                "Add an event to the kid's calendar. Call this only when a VERIFIED "
+                "parent asks to schedule, add, or put something on their kid's calendar."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "event_name": {
+                        "type": "string",
+                        "description": "Name of the event (e.g. 'Dentist appointment').",
+                    },
+                    "date": {
+                        "type": "string",
+                        "description": "Date of the event (e.g. 'Thursday', 'May 22').",
+                    },
+                    "time": {
+                        "type": "string",
+                        "description": "Time of the event (e.g. '3pm', '15:00').",
+                    },
+                    "reminder": {
+                        "type": "string",
+                        "description": "Optional reminder timing (e.g. '1 hour before').",
+                    },
+                },
+                "required": ["event_name", "date", "time"],
+                "additionalProperties": False,
+            },
+        },
+    },
     # remember_fact and recall schemas removed — Supermemory disabled.
     {
         "type": "function",
@@ -302,6 +357,21 @@ async def dispatch_tool(
         student_name = str(args.get("student_name", "")).strip()
         result = await _dispatch_check_grades(sender_phone, student_name, ctx)
         return result
+
+    if name == "get_browser_history":
+        return await _get_browser_history(
+            sender_phone=sender_phone,
+            kid_name=str(args.get("kid_name", "")).strip(),
+        )
+
+    if name == "add_calendar_event":
+        return await _add_calendar_event(
+            sender_phone=sender_phone,
+            event_name=str(args.get("event_name", "")).strip(),
+            date=str(args.get("date", "")).strip(),
+            time=str(args.get("time", "")).strip(),
+            reminder=str(args.get("reminder") or "").strip() or None,
+        )
 
     # Supermemory disabled — remember/recall are no-ops for now.
     if name == "remember_fact":
@@ -506,6 +576,19 @@ async def _dispatch_check_grades(sender_phone: str, student_name: str, ctx: dict
         except Exception:
             log.exception("Failed to send live link")
 
+    # 4b. Notify kid BEFORE grades load
+    parent = get_user_by_phone(sender_phone)
+    if parent:
+        kid = get_kid_for_parent(parent["id"])
+        if kid and kid["onboarding_state"] == "verified":
+            try:
+                await send_message(
+                    to_number=kid["phone"],
+                    body=f"heads up, {parent['name']} is checking your grades",
+                )
+            except Exception:
+                log.exception("Failed to notify kid about grades check")
+
     # 5. Stream steps as iMessages — rewrite robotic browser-agent plans
     #    into natural first-person updates, and scrub credentials.
     steps_sent = 0
@@ -563,8 +646,6 @@ async def _dispatch_check_grades(sender_phone: str, student_name: str, ctx: dict
         task_id, task_response=task_response, on_step=on_step
     )
 
-    ctx["notify_kid_about_grades"] = True
-
     # Supermemory disabled — skipping grade snapshot.
 
     # Include live link in tool result so the LLM can mention it in its reply
@@ -619,6 +700,65 @@ async def _send_message_to_parent(*, sender_phone: str, message: str) -> str:
         log.exception("Failed to send message to parent")
         return f"ERROR: couldn't send the message: {e}"
     return f"Sent to {parent['name']}."
+
+
+async def _get_browser_history(*, sender_phone: str, kid_name: str) -> str:
+    """Return hardcoded fake browser history for demo."""
+    parent = get_user_by_phone(sender_phone)
+    if not parent or parent["role"] != "parent" or parent["onboarding_state"] != "verified":
+        return "ERROR: only a verified parent can check browser history."
+    kid = get_kid_for_parent(parent["id"])
+    if not kid:
+        return "ERROR: no kid registered for this parent."
+
+    # Notify kid BEFORE returning results
+    if kid["onboarding_state"] == "verified":
+        try:
+            await send_message(
+                to_number=kid["phone"],
+                body=f"heads up, {parent['name']} is looking at your browser history",
+            )
+        except Exception:
+            log.exception("Failed to notify kid about browser history check")
+
+    return (
+        f"browser history for {kid['name']} (last 3 days):\n"
+        f"- may 15, 2:34pm - learn.uwaterloo.ca (D2L course page, ~25 min)\n"
+        f"- may 15, 3:10pm - youtube.com (MrBeast 'Ages 1-100' video, ~18 min)\n"
+        f"- may 15, 4:45pm - discord.com (Discord chat, ~40 min)\n"
+        f"- may 16, 10:15am - learn.uwaterloo.ca (D2L assignment submission, ~15 min)\n"
+        f"- may 16, 11:02am - youtube.com (MrBeast '$1 vs $1,000,000 Hotel' video, ~22 min)\n"
+        f"- may 16, 11:58pm - explicit-content-site.com (adult content, ~8 min)\n"
+        f"- may 17, 9:00am - learn.uwaterloo.ca (D2L quiz page, ~30 min)\n"
+        f"- may 17, 10:15am - discord.com (Discord, ~20 min)"
+    )
+
+
+async def _add_calendar_event(
+    *, sender_phone: str, event_name: str, date: str, time: str, reminder: str | None
+) -> str:
+    """Hardcoded calendar event creation for demo."""
+    parent = get_user_by_phone(sender_phone)
+    if not parent or parent["role"] != "parent" or parent["onboarding_state"] != "verified":
+        return "ERROR: only a verified parent can add calendar events."
+    kid = get_kid_for_parent(parent["id"])
+    if not kid:
+        return "ERROR: no kid registered for this parent."
+
+    # Notify kid about the new calendar event
+    if kid["onboarding_state"] == "verified":
+        try:
+            await send_message(
+                to_number=kid["phone"],
+                body=f"{parent['name']} added {event_name} to your calendar on {date} at {time}",
+            )
+        except Exception:
+            log.exception("Failed to notify kid about calendar event")
+
+    reminder_text = f" reminder set for {reminder}." if reminder else " reminder set for 1 hour before."
+    return (
+        f"added to {kid['name']}'s calendar: {event_name}, {date} at {time}.{reminder_text}"
+    )
 
 
 def normalize_phone(phone: str) -> str:

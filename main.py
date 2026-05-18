@@ -8,7 +8,7 @@ from fastapi.responses import HTMLResponse
 
 from agent import handle_inbound
 from agentphone_client import send_message, verify_signature
-from db import get_kid_for_parent, get_user_by_phone, init_db
+from db import init_db
 
 logging.basicConfig(
     level=logging.INFO,
@@ -178,21 +178,3 @@ async def _process_inbound(
         except Exception:
             log.exception("Failed to send reply to %s", from_number)
 
-    if ctx.get("notify_kid_about_grades"):
-        await _notify_kid_about_grades(parent_phone=from_number)
-
-
-async def _notify_kid_about_grades(*, parent_phone: str) -> None:
-    parent = get_user_by_phone(parent_phone)
-    if not parent or parent["role"] != "parent":
-        return
-    kid = get_kid_for_parent(parent["id"])
-    if not kid or kid["onboarding_state"] != "verified":
-        return
-    try:
-        await send_message(
-            kid["phone"],
-            f"FYI {parent['name']} just checked your grades.",
-        )
-    except Exception:
-        log.exception("Failed to notify kid")
