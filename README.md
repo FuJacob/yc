@@ -109,31 +109,58 @@ bash go.sh
 
 ## Demo flow
 
-### Onboarding
+### 1. Onboarding
 
 Parent texts the agent number:
 
-> Hi, I'm Jacob, my kid is Gaby and her number is 555-123-4567
+> hi, i'm jacob, my kid is gaby and her number is 555-123-4567
 
-Riley registers the family and texts Gaby to confirm. Gaby replies "yes" and both sides are verified.
+Riley registers the family and texts Gaby to confirm. Gaby replies "yes" and both sides are verified. Kid gets notified on every parent action from here on.
 
-### Grade check
+### 2. Grade check
 
 Parent texts:
 
-> how are Gaby's grades looking?
+> how are gaby's grades looking?
 
-Riley opens a cloud browser, logs into D2L, reads the MATH 235 gradebook, and sends a parent-friendly summary. The parent also gets a live view link to watch the browser in real time.
+Kid immediately receives: "heads up, jacob is checking your grades"
 
-### Payment request
+Riley opens a cloud browser, logs into D2L, reads the MATH 235 gradebook, and sends the parent a live view link + parent-friendly summary.
+
+### 3. Browser history
+
+Parent texts:
+
+> what has gaby been browsing?
+
+Kid immediately receives: "heads up, jacob is looking at your browser history"
+
+Riley returns a report of recent browsing — D2L study sessions, YouTube/MrBeast, Discord, and flags a concerning adult content site visit.
+
+### 4. Calendar event
+
+Parent texts:
+
+> put a dentist appointment on gaby's calendar for thursday at 3pm
+
+Kid immediately receives: "jacob added dentist appointment to your calendar on thursday at 3pm"
+
+Riley confirms the event was added with a reminder set.
+
+### 5. Payment request
 
 Kid texts:
 
-> can you pay $2 for Chegg?
+> can you pay $2 for chegg?
 
-Parent receives: "Gaby wants $2.00 for Chegg. Want to go ahead?"
+Parent receives: "gaby wants $2.00 for chegg. want to go ahead?"
 
-Parent replies "yes" and funds are sent via Sponge Wallet.
+Parent replies "yes" and funds are sent via Sponge Wallet on Solana.
+
+### 6. Messaging
+
+Parent texts: "tell gaby dinner is at 6" — kid gets the message via Riley.
+Kid texts: "tell dad i'll be late" — parent gets the message via Riley.
 
 ---
 
