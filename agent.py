@@ -18,7 +18,7 @@ from db import (
     get_user_by_phone,
     save_onboarding_session,
 )
-# import memory  # Supermemory disabled
+import memory
 from tools import TOOL_SCHEMAS, dispatch_tool, normalize_phone
 
 log = logging.getLogger(__name__)
@@ -105,12 +105,19 @@ async def handle_inbound(
         if reply is not None:
             return reply, ctx
 
-    context_str = _build_context(sender_phone)
+    import asyncio
+    context_str, memories = await asyncio.gather(
+        asyncio.to_thread(_build_context, sender_phone),
+        memory.recall(family_id, message_text),
+    )
 
     system_blocks = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "system", "content": f"CONTEXT:\n{context_str}"},
     ]
+    memories_block = memory.format_memories_block(memories)
+    if memories_block:
+        system_blocks.append({"role": "system", "content": memories_block})
 
     messages: list[dict] = system_blocks
 

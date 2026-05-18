@@ -18,7 +18,7 @@ from db import (
     set_onboarding_state,
     set_payout_destination,
 )
-# import memory  # Supermemory disabled
+import memory
 from payment_service import (
     approve_payment_request,
     create_payment_request,
@@ -172,7 +172,59 @@ TOOL_SCHEMAS = [
             },
         },
     },
-    # remember_fact and recall schemas removed — Supermemory disabled.
+    {
+        "type": "function",
+        "function": {
+            "name": "remember_fact",
+            "description": (
+                "Store a durable fact about this family for future conversations. "
+                "Use when the user shares info worth remembering: school/program, "
+                "current courses, tutors, recurring schedules, preferences, etc. "
+                "Do NOT use for ephemeral things ('I'm tired today')."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "content": {
+                        "type": "string",
+                        "description": "The fact to remember, written as a complete sentence.",
+                    },
+                    "category": {
+                        "type": "string",
+                        "enum": ["school_info", "preference", "relationship", "approval", "other"],
+                        "description": "What kind of fact this is.",
+                    },
+                    "kid_name": {
+                        "type": "string",
+                        "description": "Name of the kid this fact is about, if any.",
+                    },
+                },
+                "required": ["content", "category"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "recall",
+            "description": (
+                "Search memories for past facts about this family. Use when the user "
+                "asks about something you might have heard before."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Short natural-language description of what to look up.",
+                    }
+                },
+                "required": ["query"],
+                "additionalProperties": False,
+            },
+        },
+    },
     {
         "type": "function",
         "function": {
@@ -373,12 +425,32 @@ async def dispatch_tool(
             reminder=str(args.get("reminder") or "").strip() or None,
         )
 
-    # Supermemory disabled — remember/recall are no-ops for now.
     if name == "remember_fact":
-        return "stored"
+        content = str(args.get("content", "")).strip()
+        category = str(args.get("category", "other")).strip() or "other"
+        kid_name = str(args.get("kid_name", "")).strip() or None
+        family_id = ctx.get("family_id")
+        if family_id is None:
+            return "ERROR: cannot remember — sender has no family registered yet."
+        if not content:
+            return "ERROR: content is empty."
+        md: dict = {"category": category, "source": "user_message"}
+        if kid_name:
+            md["kid_name"] = kid_name
+        ok = await memory.remember(family_id, content, md)
+        return "stored" if ok else "memory currently unavailable (continuing without)"
 
     if name == "recall":
-        return "no relevant memories found."
+        query = str(args.get("query", "")).strip()
+        family_id = ctx.get("family_id")
+        if family_id is None:
+            return "no memories — sender has no family yet."
+        if not query:
+            return "ERROR: query is empty."
+        results = await memory.recall(family_id, query)
+        if not results:
+            return "no relevant memories found."
+        return memory.format_memories_block(results) or "no relevant memories found."
 
     if name == "unregister_family":
         sender = get_user_by_phone(sender_phone)
@@ -495,7 +567,16 @@ async def _register_family(
         ):
             set_payout_destination(kid_id, KID_DEFAULT_PAYOUT_DESTINATION.strip())
 
-    # Supermemory disabled — skipping initial family memory seed.
+    # Seed an initial family memory (no-op if Supermemory disabled).
+    from datetime import datetime, timezone
+    memory.fire_and_forget(
+        memory.remember(
+            family_id,
+            f"Family registered on {datetime.now(timezone.utc).date().isoformat()}: "
+            f"parent={parent_name}, kid={kid_name}.",
+            {"category": "school_info", "kid_name": kid_name, "source": "registration"},
+        )
+    )
 
     try:
         await send_message(
@@ -646,7 +727,12 @@ async def _dispatch_check_grades(sender_phone: str, student_name: str, ctx: dict
         task_id, task_response=task_response, on_step=on_step
     )
 
-    # Supermemory disabled — skipping grade snapshot.
+    # Fire-and-forget grade snapshot to memory (no-op if Supermemory disabled).
+    family_id = ctx.get("family_id")
+    if family_id is not None:
+        memory.fire_and_forget(
+            memory.snapshot_grades(family_id, student_name, result)
+        )
 
     # Include live link in tool result so the LLM can mention it in its reply
     if live_view_url:
