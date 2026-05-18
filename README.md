@@ -155,6 +155,36 @@ Parent replies "yes" and funds are sent via Sponge Wallet.
 
 ---
 
+## Sponsor Tech Stack
+
+Riley uses **6 sponsor technologies** in a single end-to-end flow — not as checkboxes, but because each one solves a real problem in the architecture.
+
+### AgentPhone — the backbone
+
+Everything runs through AgentPhone. Inbound iMessages and SMS hit our webhook, we process them through the orchestrator, and reply via AgentPhone's send API. Without it, Riley is just a FastAPI server with no way to reach anyone. AgentPhone also handles webhook signatures so we don't process spoofed messages.
+
+### Browser Use — grade checking
+
+Parents can't give us their D2L password and trust us with it forever. Browser Use Cloud gives us an isolated browser session with a persistent profile, so we log into UWaterloo's D2L once and the session carries across runs. The live streaming URL means the parent can watch the browser navigate in real time — they see their kid's grades load, not a black box. This is the single biggest trust signal in the demo.
+
+### Sponge — payments
+
+When a kid asks to pay for something, we need actual money to move. Sponge handles the transfer from parent wallet to kid destination on Solana. The kid texts "can you pay $2 for Chegg?", parent says yes, funds move in seconds. No Stripe checkout page, no redirect, no friction — just a text conversation that ends with real money sent.
+
+### Supermemory — family context
+
+Without memory, every conversation starts from zero. Supermemory gives Riley semantic search across past interactions — grade snapshots, family preferences, school info. When a parent asks "how is Gaby doing compared to last time?", Riley can pull the previous grade check from memory and compare. One API for store, one for search, scoped per family via container tags.
+
+### Google DeepMind (Gemini) — orchestrator intelligence
+
+The orchestrator model drives every decision: which tool to call, what to say, how to interpret natural language like "yeah go ahead" as payment approval. It runs the full tool-calling loop — register, verify, check grades, send payments, remember facts — all from a single system prompt.
+
+### OpenAI — orchestrator backbone
+
+GPT-5.4-nano runs the core tool-calling loop. Fast enough for real-time SMS conversations, smart enough to handle multi-step flows (register → verify → check grades → send message to kid) without hand-holding.
+
+---
+
 ## Troubleshooting
 
 - **D2L not logged in**: Re-run the profile sync script. Sessions expire in ~20-30 min.
