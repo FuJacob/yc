@@ -102,8 +102,7 @@ async def handle_inbound(
         if reply is not None:
             return reply, ctx
 
-    import asyncio
-    context_str = await asyncio.to_thread(_build_context, sender_phone)
+    context_str = _build_context(sender_phone)
 
     system_blocks = [
         {"role": "system", "content": SYSTEM_PROMPT},
@@ -163,13 +162,13 @@ async def handle_inbound(
                 }
             )
 
-            for tc in msg.tool_calls:
+            async def _run_tool(tc):
                 try:
                     args = json.loads(tc.function.arguments) if tc.function.arguments else {}
                 except json.JSONDecodeError:
                     args = {}
                 try:
-                    tool_result = await dispatch_tool(
+                    return await dispatch_tool(
                         tc.function.name,
                         args,
                         sender_phone=sender_phone,
@@ -177,8 +176,11 @@ async def handle_inbound(
                     )
                 except Exception as e:
                     log.exception("Tool %s raised", tc.function.name)
-                    tool_result = f"ERROR: {type(e).__name__}: {e}"
+                    return f"ERROR: {type(e).__name__}: {e}"
 
+            import asyncio
+            results = await asyncio.gather(*[_run_tool(tc) for tc in msg.tool_calls])
+            for tc, tool_result in zip(msg.tool_calls, results):
                 messages.append(
                     {
                         "role": "tool",

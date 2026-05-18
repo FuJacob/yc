@@ -15,15 +15,23 @@ from config import (
 
 log = logging.getLogger(__name__)
 
-SEND_BACKOFF_SECONDS = (1.0, 3.0, 7.0, 15.0)
+SEND_BACKOFF_SECONDS = (0.3, 1.0, 3.0, 7.0)
+
+# Shared persistent client — reuses TCP+TLS connections across calls.
+_http: httpx.AsyncClient | None = None
+
+
+def _get_client() -> httpx.AsyncClient:
+    global _http
+    if _http is None or _http.is_closed:
+        _http = httpx.AsyncClient(
+            timeout=20,
+            headers={"Authorization": f"Bearer {AGENT_PHONE_API_KEY}"},
+        )
+    return _http
 
 
 def verify_signature(raw_body: bytes, signature_header: str) -> bool:
-    """Verify AgentPhone webhook HMAC-SHA256 signature.
-
-    Per AgentPhone docs the signed string is the raw body bytes — no timestamp
-    concatenation. Skipped (returns True) if no webhook secret is configured.
-    """
     if not AGENT_PHONE_WEBHOOK_SECRET:
         return True
     if not signature_header:
@@ -51,6 +59,7 @@ async def send_message(to_number: str, body: str) -> dict:
     if AGENT_PHONE_NUMBER_ID:
         payload["number_id"] = AGENT_PHONE_NUMBER_ID
 
+    client = _get_client()
     last_error: Exception | None = None
     for attempt, backoff in enumerate([0.0, *SEND_BACKOFF_SECONDS]):
         if backoff:
@@ -62,12 +71,10 @@ async def send_message(to_number: str, body: str) -> dict:
             )
             await asyncio.sleep(backoff)
         try:
-            async with httpx.AsyncClient(timeout=20) as client:
-                r = await client.post(
-                    f"{AGENT_PHONE_BASE_URL}/v1/messages",
-                    headers={"Authorization": f"Bearer {AGENT_PHONE_API_KEY}"},
-                    json=payload,
-                )
+            r = await client.post(
+                f"{AGENT_PHONE_BASE_URL}/v1/messages",
+                json=payload,
+            )
         except (httpx.TimeoutException, httpx.TransportError) as e:
             last_error = e
             continue
@@ -75,12 +82,10 @@ async def send_message(to_number: str, body: str) -> dict:
         if r.status_code < 400:
             return r.json()
 
-        # 4xx → don't retry, the request is broken
         if 400 <= r.status_code < 500:
             log.error("send_message client error %d: %s", r.status_code, r.text[:300])
             r.raise_for_status()
 
-        # 5xx → retry
         last_error = httpx.HTTPStatusError(
             f"{r.status_code} server error", request=r.request, response=r
         )
@@ -88,26 +93,3 @@ async def send_message(to_number: str, body: str) -> dict:
 
     log.error("send_message exhausted retries: %s", last_error)
     raise last_error if last_error else RuntimeError("send_message failed without an error")
-
-
-async def end_call(call_id: str, reason: str = "") -> None:
-    """Hang up an in-progress voice call.
-
-    Best-effort: errors are logged and swallowed because the voice model has
-    already told the caller goodbye by the time this fires — no point
-    surfacing the failure.
-    """
-    if not AGENT_PHONE_API_KEY:
-        log.warning("end_call skipped: AGENT_PHONE_API_KEY not set")
-        return
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            r = await client.post(
-                f"{AGENT_PHONE_BASE_URL}/v1/calls/{call_id}/end",
-                headers={"Authorization": f"Bearer {AGENT_PHONE_API_KEY}"},
-                json={"reason": reason} if reason else {},
-            )
-        if r.status_code >= 400:
-            log.warning("end_call returned %d: %s", r.status_code, r.text[:200])
-    except Exception:
-        log.exception("end_call failed for call_id=%s", call_id)
