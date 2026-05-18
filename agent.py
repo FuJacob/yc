@@ -1,5 +1,6 @@
 import json
 import logging
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
 
@@ -101,12 +102,11 @@ async def handle_inbound(
 
     messages: list[dict] = system_blocks
 
-    # For unknown senders, only use the last 4 history entries — enough for
-    # multi-turn onboarding but drops stale context from before a DB reset.
-    # Known senders get the full history.
-    history = recent_history or []
-    if not user:
-        history = history[-4:]
+    # Filter history to only messages AFTER this user's registration.
+    # AgentPhone keeps the full phone conversation, so after a DB reset the
+    # stale messages from a previous registration leak old names/state.
+    # Unknown senders have no registration time — drop all history for them.
+    history = _filter_history(recent_history or [], user)
     for h in history:
         role = "assistant" if h.get("direction") == "outbound" else "user"
         content = h.get("content") or h.get("body") or h.get("message") or ""
@@ -219,6 +219,40 @@ def _build_context(sender_phone: str) -> str:
         lines.extend(payment_lines)
 
     return "\n".join(lines)
+
+
+def _filter_history(history: list[dict], user: dict | None) -> list[dict]:
+    """Only keep history entries timestamped after the user's registration.
+
+    AgentPhone sends the full SMS/iMessage thread, which survives DB resets.
+    Without filtering, the LLM sees old names/state from a prior registration
+    and hallucinates.  Unknown senders get zero history (clean onboarding).
+    """
+    if not user:
+        return []
+
+    created_at = user.get("created_at")
+    if not created_at:
+        return history
+
+    try:
+        cutoff = datetime.fromisoformat(created_at)
+    except (ValueError, TypeError):
+        return history
+
+    filtered = []
+    for h in history:
+        ts_str = h.get("timestamp") or h.get("created_at") or h.get("date") or ""
+        if not ts_str:
+            filtered.append(h)
+            continue
+        try:
+            ts = datetime.fromisoformat(ts_str)
+            if ts >= cutoff:
+                filtered.append(h)
+        except (ValueError, TypeError):
+            filtered.append(h)
+    return filtered
 
 
 def _build_payment_context(family_id: int) -> list[str]:
