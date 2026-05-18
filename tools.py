@@ -482,9 +482,9 @@ async def _register_family(
         await send_message(
             to_number=kid_phone,
             body=(
-                f"Hi {kid_name}, your parent {parent_name} just registered you with "
+                f"Hey {kid_name}, your parent {parent_name} just set you up with "
                 f"Riley so they can help with school stuff like checking your grades. "
-                f"Reply YES to confirm this is you."
+                f"Is this you? Just let me know and you're all set."
             ),
         )
     except Exception as e:
@@ -497,7 +497,7 @@ async def _register_family(
     return (
         f"Family registered (family_id={family_id}). Parent {parent_name} "
         f"(id={parent_id}) auto-verified. Kid {kid_name} (id={kid_id}) is now "
-        f"pending verification — a YES reply from {kid_phone} will complete it."
+        f"pending verification — once {kid_name} confirms via text, they're all set."
     )
 
 
@@ -518,7 +518,8 @@ async def _confirm_kid(*, kid_phone: str) -> str:
             await send_message(
                 to_number=parent["phone"],
                 body=(
-                    f"{kid['name']} is verified. Try asking 'what are {kid['name']}'s grades?'"
+                    f"{kid['name']} confirmed — you're all set! You can ask me things like "
+                    f"\"how are {kid['name']}'s grades looking?\""
                 ),
             )
         except Exception:

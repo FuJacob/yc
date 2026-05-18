@@ -99,15 +99,15 @@ async def create_payment_request(
     reason_clause = f": '{reason}'" if reason else ""
     needs_destination = not (kid.get("payout_destination") or "").strip()
     destination_note = (
-        f" Heads up: no payout destination is set for {kid['name']} yet — "
-        f"reply 'send {kid['name']}'s payments to <destination>' first, "
-        f"then APPROVE."
+        f" Heads up: I don't have a payout destination for {kid['name']} yet — "
+        f"just tell me where to send {kid['name']}'s payments and then "
+        f"let me know you're good with this one."
         if needs_destination
         else ""
     )
     parent_msg = (
         f"{kid['name']} wants {amount_str} for {service_name}{reason_clause}. "
-        f"Reply APPROVE {req['request_code']} or DECLINE {req['request_code']}."
+        f"Want to go ahead? Just say yes or no (ref: {req['request_code']})."
         f"{destination_note}"
     )
     try:
@@ -164,9 +164,9 @@ async def approve_payment_request(
     kid = get_user_by_id(row["kid_user_id"])
     if kid and not (kid.get("payout_destination") or "").strip():
         return (
-            f"Can't approve yet — no payout destination is set for {kid['name']}. "
-            f"Reply 'send {kid['name']}'s payments to <destination>' first, "
-            f"then APPROVE {row['request_code']} again."
+            f"Can't send this yet — I don't have a payout destination for {kid['name']}. "
+            f"Just tell me where to send {kid['name']}'s payments, and then "
+            f"let me know you want to go ahead with this one."
         )
 
     ok = transition_status(
