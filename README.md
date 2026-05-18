@@ -1,211 +1,164 @@
-# FamilyOps
+# Riley
 
-iMessage agent that lets a parent check their kid's grades by texting. Hackathon MVP for Call My Agent @ YC, 2026-05-17.
+One AI agent for the whole family — reachable by iMessage/SMS.
 
-See [RFC.md](RFC.md) for design + scope.
-
----
-
-## Prerequisites
-
-- Python 3.11 (Homebrew: `brew install python@3.11`)
-- Google Chrome installed at the standard location
-- An AgentPhone account with API key + agent + number provisioned
-- OpenAI API key
-- Browser Use API key (for Claude Sonnet 4.6 via their hosted model proxy)
-- Sponge agent API key for payment demos
-- `ngrok` (or any tunneling tool) to expose the local FastAPI to AgentPhone
+Riley checks your kid's grades on UWaterloo D2L, handles kid-initiated payment requests via Sponge Wallet, and remembers family context across conversations. Built at the Call My Agent Hackathon @ YC, 2026-05-17.
 
 ---
 
-## One-time setup
+## What it does
 
-### 1. Python deps
+1. **Onboarding** — Parent texts Riley with their name, kid's name, and kid's phone. Riley texts the kid to verify.
+2. **Grade checking** — Parent asks "how are Gaby's grades?" and Riley opens a cloud browser, logs into D2L, reads the gradebook, and sends back a parent-friendly summary with a live view link.
+3. **Payment requests** — Kid texts "can you pay $2 for Chegg?" and Riley asks the parent for approval. On approval, funds move via Sponge Wallet.
+4. **Memory** — Riley remembers facts about your family across conversations (school info, preferences, schedules) via Supermemory.
+5. **General assistant** — Off-topic questions (homework help, recipes, trivia) get answered naturally.
+
+---
+
+## Architecture
+
+```
+iMessage/SMS  <-->  AgentPhone  <-->  FastAPI webhook  <-->  OpenAI orchestrator
+                                           |
+                            +--------------+--------------+
+                            |              |              |
+                      Browser Use    Sponge Wallet   Supermemory
+                      (D2L grades)   (payments)      (family memory)
+```
+
+- **Orchestrator**: OpenAI tool-calling loop (`gpt-5.4-nano`)
+- **Browser**: Browser Use Cloud SDK with live streaming
+- **Payments**: Sponge Wallet SDK (Solana/Base)
+- **Memory**: Supermemory semantic search
+- **DB**: SQLite (families, users, payment requests, audit trail)
+- **Frontend**: Static landing page
+
+---
+
+## Setup
+
+### 1. Install deps
 
 ```bash
-/opt/homebrew/bin/python3.11 -m venv .venv   # must be 3.11+; 3.9 ships with macOS
-.venv/bin/pip install -r requirements.txt
-.venv/bin/playwright install chromium
+pip install -r requirements.txt
 ```
 
-### 2. Fill `.env`
-
-Copy `.env.example` to `.env` and fill in:
+### 2. Configure `.env`
 
 ```
-AGENT_PHONE_API_KEY=sk_live_...
-AGENT_PHONE_AGENT_ID=agt_...
-AGENT_PHONE_NUMBER_ID=num_...
-AGENT_PHONE_WEBHOOK_SECRET=          # leave empty for dev; signature check is skipped
 OPENAI_API_KEY=sk-...
 BROWSER_USE_API_KEY=bu_...
+BROWSER_USE_PROFILE_ID=...
+PUBLIC_URL=https://your-ngrok-url.ngrok-free.dev
+AGENT_PHONE_API_KEY=sk_live_...
+AGENT_PHONE_AGENT_ID=...
+AGENT_PHONE_NUMBER_ID=...
+SUPERMEMORY_API_KEY=sm_...
+D2L_USERNAME=user@uwaterloo.ca
+D2L_PASSWORD=...
 SPONGE_API_KEY=sponge_live_...
-PAYMENT_DEMO_SERVICE_NAME=research service
-PAYMENT_DEMO_TARGET=pl_demo_or_url
+KID_DEFAULT_PAYOUT_DESTINATION=...
+PAYMENT_REQUEST_TTL_MINUTES=30
+PAYMENT_DEFAULT_CHAIN=solana
 ```
 
-If you don't yet have `AGENT_PHONE_AGENT_ID` / `NUMBER_ID`, sign up via the API:
+### 3. Sync browser profile (for D2L cookies)
 
 ```bash
-curl -X POST https://api.agentphone.ai/v0/agent/sign-up \
-  -H "Content-Type: application/json" \
-  -d '{"human_email":"you@example.com"}'
-
-# then with the OTP from email:
-curl -X POST https://api.agentphone.ai/v0/agent/verify \
-  -H "Content-Type: application/json" \
-  -d '{"verification_id":"ver_...","otp_code":"123456"}'
+curl -fsSL https://browser-use.com/profile.sh | sh
 ```
 
-The verify response contains `agent_id`, `number_id`, `phone_number`, and `api_key`. Drop them into `.env`.
+This uploads your local Chrome cookies to the Browser Use cloud profile. D2L sessions expire in ~20-30 min, so re-run before demos.
 
-### 3. Prime the dedicated Chrome profile with D2L
-
-We use a project-local Chrome profile dir so it doesn't fight your normal browser.
+### 4. Start ngrok
 
 ```bash
-mkdir -p chrome-profile
-open -na "Google Chrome" --args --user-data-dir="$PWD/chrome-profile"
+ngrok http 8000
 ```
 
-In the Chrome window that opens:
-1. Navigate to https://learn.uwaterloo.ca/d2l/
-2. Log in (complete any 2FA / Duo push)
-3. Confirm you can see the homepage
-4. **Quit Chrome completely** (Cmd+Q) before running the agent — Chrome locks the profile dir.
+Copy the public URL into `PUBLIC_URL` in `.env`.
 
-### 4. ngrok auth (one-time)
+### 5. Run
 
 ```bash
-# Get a token from https://dashboard.ngrok.com/get-started/your-authtoken
-ngrok config add-authtoken YOUR_NGROK_TOKEN
+uvicorn main:app --reload
 ```
 
-### 5. Run everything
+Or use the full reset + restart script:
 
 ```bash
-scripts/start.sh
+bash go.sh
 ```
 
-This boots uvicorn, starts ngrok, reads the public URL from ngrok's local API, and POSTs that URL to AgentPhone as the agent webhook — in one shot. Output looks like:
+---
 
-```
-ready.
-  server pid:  12345
-  tunnel pid:  12346
-  tunnel url:  https://populate-stem-goggles.ngrok-free.dev
-  webhook:     https://populate-stem-goggles.ngrok-free.dev/webhook
-```
+## Scripts
 
-Other dev commands:
-
-| Script | Does |
+| Script | Purpose |
 |---|---|
-| `scripts/stop.sh` | Stops both processes |
-| `scripts/restart.sh` | Stop + start (re-registers webhook with new ngrok URL) |
-| `scripts/status.sh` | Process state + tunnel URL + DB summary + AgentPhone webhook config |
-| `scripts/logs.sh` | `tail -F` server log (`-t` adds tunnel log) |
-| `scripts/reset-db.sh` | Wipe `familyops.db`, recreate empty schema |
-| `scripts/resend-verification.sh [phone]` | Re-fire verification text on AgentPhone 502 outage |
-
-### Webhook secret (optional, for production)
-
-The first call to AgentPhone's webhook-register endpoint returns a `secret`. If you set `AGENT_PHONE_WEBHOOK_SECRET=<that secret>` in `.env` and restart, the server starts verifying HMAC signatures on inbound webhooks. Leave it empty for dev — signature verification is skipped.
+| `scripts/start.sh` | Boot FastAPI + ngrok, register webhook |
+| `scripts/stop.sh` | Kill both processes |
+| `scripts/restart.sh` | Stop + start |
+| `scripts/status.sh` | Process state, tunnel URL, DB summary |
+| `scripts/logs.sh` | Tail server log (`-t` adds tunnel log) |
+| `scripts/reset-db.sh` | Wipe DB + Supermemory, recreate schema |
+| `scripts/sponge-status.py` | Smoke test Sponge wallet balances |
 
 ---
 
-## Health check
+## Demo flow
 
-```bash
-curl localhost:8000/health      # local
-curl $(cat /tmp/familyops-tunnel-url)/health  # via ngrok
-```
+### Onboarding
 
-Sponge readiness check:
+Parent texts the agent number:
 
-```bash
-.venv/bin/python scripts/sponge-status.py
-```
+> Hi, I'm Jacob, my kid is Gaby and her number is 555-123-4567
 
----
+Riley registers the family and texts Gaby to confirm. Gaby replies "yes" and both sides are verified.
 
-## Demo
+### Grade check
 
-### Onboarding (one-time per family)
+Parent texts:
 
-From the parent phone, text the AgentPhone number something like:
+> how are Gaby's grades looking?
 
-> Hey, I'm Jacob, register my kid Alex at +14155551234
-
-Expected reply: `Got it Jacob — texting Alex now.`
-
-The kid's phone receives:
-
-> Hi Alex, your parent Jacob just registered you with FamilyOps...
-
-Kid replies `YES`. They get a thanks; parent gets `Alex is verified.`
-
-### Grade query
-
-From the parent phone:
-
-> what are Alex's grades?
-
-You'll see Chrome open on the demo laptop, Browser Use navigates D2L, then the parent receives a grade summary. The kid simultaneously receives `FYI Jacob just checked your grades.`
+Riley opens a cloud browser, logs into D2L, reads the MATH 235 gradebook, and sends a parent-friendly summary. The parent also gets a live view link to watch the browser in real time.
 
 ### Payment request
 
-From the verified kid phone:
+Kid texts:
 
-> can you pay $2 for the research service? I need it for homework
+> can you pay $2 for Chegg?
 
-The parent receives an approval prompt with a 6-digit code:
+Parent receives: "Gaby wants $2.00 for Chegg. Want to go ahead?"
 
-> Alex wants $2.00 for research service: 'I need it for homework'. Reply APPROVE 482193 or DECLINE 482193.
-
-From the parent phone:
-
-> approve 482193
-
-FamilyOps records the approval, moves the request through the SQLite payment state machine, and attempts the configured Sponge demo target. If `PAYMENT_DEMO_TARGET` is missing or the Sponge call fails, both parties get a safe failure message and the audit row is marked `failed`.
-
----
-
-## Daily reset
-
-Wipe the SQLite db to start fresh:
-
-```bash
-rm familyops.db
-```
-
-(The next startup recreates the schema automatically.)
-
----
-
-## Troubleshooting
-
-- **Browser Use can't open Chrome:** make sure no Chrome window is open against `./chrome-profile`. Quit Chrome with Cmd+Q.
-- **D2L logs out:** re-launch Chrome with `--user-data-dir=$PWD/chrome-profile`, log back in, quit Chrome.
-- **Webhook 401:** either remove `AGENT_PHONE_WEBHOOK_SECRET` from `.env` (dev mode) or make sure it matches what AgentPhone returned.
-- **OpenAI model 404:** `ORCHESTRATOR_MODEL` env var overrides the default. Try `gpt-5.4-mini` or `gpt-5` if `gpt-5.4-nano` isn't available on your account.
-- **AgentPhone send_message 4xx:** check `AGENT_PHONE_AGENT_ID` is correct and the number is attached to the agent.
-- **Payment request becomes manual:** set `PAYMENT_DEMO_SERVICE_NAME` to the exact service phrase the kid will use, and set `PAYMENT_DEMO_TARGET` to the hardcoded Sponge link/id for the demo.
-- **Sponge payment fails before spending:** run `scripts/sponge-status.py` and confirm `SPONGE_API_KEY` is set and the wallet is funded.
+Parent replies "yes" and funds are sent via Sponge Wallet.
 
 ---
 
 ## File map
 
-| File | What it does |
+| File | Purpose |
 |---|---|
-| `main.py` | FastAPI app + `/webhook` handler. Verifies HMAC, parses payload, kicks BG task. |
-| `agent.py` | Orchestrator LLM loop. Builds context, runs OpenAI tool-call loop. |
-| `tools.py` | Tool schemas + dispatcher. `register_family`, `confirm_kid`, `check_d2l_grades`. |
-| `browser_agent.py` | Local `browser_use` Agent + `BrowserSession` + `ChatBrowserUse` for D2L. |
-| `agentphone_client.py` | `send_message` + HMAC signature verification. |
-| `db.py` | SQLite — `families`, `users`, payment ledger, Sponge wallet ownership. Helpers for sender resolution. |
-| `config.py` | Env var loading, paths, constants. |
-| `payment_service.py` | Deterministic payment request state machine and notification logic. |
-| `sponge_client.py` | Lazy Sponge SDK/REST wrapper with redacted payment metadata. |
-| `scripts/sponge-status.py` | Smoke check for Sponge agent, addresses, and balances. |
+| `main.py` | FastAPI app, webhook handler, live view route, per-phone message queue |
+| `agent.py` | OpenAI tool-calling orchestrator, system prompt, onboarding state machine |
+| `tools.py` | Tool schemas + dispatcher for all agent actions |
+| `browser_agent.py` | Browser Use Cloud SDK — creates sessions, streams steps, extracts grades |
+| `payment_service.py` | Payment request state machine (kid request -> parent approval -> Sponge transfer) |
+| `db.py` | SQLite schema + helpers (families, users, payments, onboarding sessions) |
+| `config.py` | Environment variable loading, paths, constants |
+| `agentphone_client.py` | AgentPhone API wrapper (send messages, verify webhook signatures) |
+| `sponge_client.py` | Sponge Wallet SDK wrapper (send funds, validate destinations) |
+| `memory.py` | Supermemory wrapper (store/recall family facts) |
+| `frontend/` | Static landing page (Riley branding) |
+
+---
+
+## Troubleshooting
+
+- **D2L not logged in**: Re-run the profile sync script. Sessions expire in ~20-30 min.
+- **AgentPhone 502**: Their servers go down. Check status or restart later.
+- **Browser Use timeout**: Increase `BROWSER_TIMEOUT_SECONDS` in `.env` (default 180s).
+- **Payment fails**: Run `scripts/sponge-status.py` to check wallet balance and API key.
+- **History leak after DB reset**: Handled automatically — old messages are filtered by registration timestamp.
