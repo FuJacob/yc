@@ -527,7 +527,8 @@ async def _dispatch_check_grades(sender_phone: str, student_name: str, ctx: dict
         except Exception:
             log.exception("Failed to send live link")
 
-    # 5. Stream steps as iMessages — filter out anything with credentials
+    # 5. Stream steps as iMessages — rewrite robotic browser-agent plans
+    #    into natural first-person updates, and scrub credentials.
     steps_sent = 0
     _sensitive = {
         v.lower()
@@ -538,16 +539,37 @@ async def _dispatch_check_grades(sender_phone: str, student_name: str, ctx: dict
         if v
     }
 
-    def _is_safe(text: str) -> bool:
-        lower = text.lower()
-        return not any(secret in lower for secret in _sensitive)
+    def _humanize_step(raw: str) -> str:
+        """Turn browser-agent goal text into a natural status update."""
+        lower = raw.lower()
+        # Scrub anything with credentials
+        if any(secret in lower for secret in _sensitive):
+            return "Signing in now..."
+        # Rewrite common robotic patterns
+        if "login" in lower or "sign in" in lower or "password" in lower or "log in" in lower:
+            return "Signing in now..."
+        if "2fa" in lower or "two-factor" in lower or "duo" in lower or "authenticat" in lower:
+            return "Handling two-factor auth..."
+        if "stay signed in" in lower or "keep me signed" in lower:
+            return "Almost through login..."
+        if "navigate" in lower and "grade" in lower:
+            return "Heading to the grades page..."
+        if "grade" in lower and ("click" in lower or "open" in lower or "select" in lower):
+            return "Opening grades..."
+        if "scroll" in lower:
+            return "Looking through the page..."
+        if "course" in lower and ("click" in lower or "select" in lower or "switch" in lower):
+            return "Checking the next course..."
+        if "extract" in lower or "read" in lower or "copy" in lower:
+            return "Reading the grades..."
+        # Fallback: strip robotic language but keep it short
+        return raw[:80] if len(raw) <= 80 else raw[:77] + "..."
 
     async def on_step(summary: str):
         nonlocal steps_sent
         if steps_sent >= MAX_STEP_MESSAGES:
             return
-        if not _is_safe(summary):
-            summary = "Logging in..."
+        summary = _humanize_step(summary)
         try:
             await send_message(to_number=sender_phone, body=summary)
             steps_sent += 1
