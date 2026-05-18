@@ -31,13 +31,17 @@ D2L_TASK_TEMPLATE = (
     "Extract every row: the Grade Item name, Points, Weight Achieved, and Grade %. "
     "If there is a course dropdown or multiple courses listed, switch to each "
     "course and read that grades table too. "
-    "Return a plain-text summary. For each course, list every grade item with "
-    "its points and percentage exactly as shown in the table. "
-    "Example format:\n"
-    "MATH 235:\n"
-    "  Mobius Assignment 1: 13/13 (100%)\n"
-    "  Midterm: 45/60 (75%)\n"
-    "Be fast. Read what's on screen and return it. Do not overthink this."
+    "Return a parent-ready assessment, not a raw table dump. "
+    "For each course, determine: overall status, completed work, missing or zero-score work, "
+    "notable low scores, and the single most important next action. "
+    "Use the grade rows as evidence, but do not list every row unless needed. "
+    "Format exactly like this:\n"
+    "COURSE: <course name>\n"
+    "STATUS: <on track | behind | concerning | unclear> - <one sentence why>\n"
+    "WHAT I SEE: <2-3 concise bullets covering completion, missing work, low scores>\n"
+    "NEXT STEP: <one practical action>\n"
+    "RAW_EVIDENCE: <compact supporting numbers only, no more than 5 items>\n"
+    "Be fast. Read what's on screen and return the assessment."
 )
 
 
@@ -76,6 +80,10 @@ async def create_d2l_session(student_name: str) -> tuple[str, str, str, Any]:
     return task_id, session_id, live_url, task_response
 
 
+_RUNNING_STATUSES = {"created", "pending", "queued", "running", "in_progress", "processing"}
+_DONE_STATUSES = {"finished", "failed", "stopped", "completed", "done", "success"}
+
+
 async def stream_until_done(
     task_id: str,
     task_response: Any = None,
@@ -91,9 +99,24 @@ async def stream_until_done(
     """
     deadline = time.monotonic() + timeout
 
+    async def _final_output_if_done() -> str | None:
+        """Return final task output when Browser Use has completed, else None."""
+        status = await client.tasks.get_task_status(task_id)
+        status_name = str(getattr(status, "status", "") or "").lower()
+        if status_name in _DONE_STATUSES:
+            if not status.output:
+                raise RuntimeError(
+                    f"Browser Use task {task_id} ended with status={status.status}, no output."
+                )
+            return str(status.output)
+        return None
+
     if task_response is not None:
         try:
             async for step in task_response.stream(interval=2):
+                final_output = await _final_output_if_done()
+                if final_output:
+                    return final_output
                 if time.monotonic() > deadline:
                     raise TimeoutError(
                         f"Browser Use task {task_id} timed out after {timeout}s"
@@ -108,22 +131,22 @@ async def stream_until_done(
             )
         else:
             # Stream finished normally — fetch the final output.
-            status = await client.tasks.get_task_status(task_id)
-            if not status.output:
-                raise RuntimeError(
-                    f"Browser Use task {task_id} ended with status={status.status}, no output."
-                )
-            return str(status.output)
+            final_output = await _final_output_if_done()
+            if final_output:
+                return final_output
 
     # Polling fallback (also reached when .stream() bailed above).
     while time.monotonic() < deadline:
         status = await client.tasks.get_task_status(task_id)
-        if status.status in ("finished", "failed", "stopped"):
+        status_name = str(getattr(status, "status", "") or "").lower()
+        if status_name in _DONE_STATUSES:
             if not status.output:
                 raise RuntimeError(
                     f"Browser Use task {task_id} ended with status={status.status}, no output."
                 )
             return str(status.output)
+        if status_name and status_name not in _RUNNING_STATUSES:
+            log.info("Browser Use task %s still active with status=%s", task_id, status.status)
         await asyncio.sleep(2)
 
     raise TimeoutError(f"Browser Use task {task_id} timed out after {timeout}s")

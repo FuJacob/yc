@@ -47,6 +47,7 @@ DECISION RULES:
 - If CONTEXT says the sender is a VERIFIED parent and they express they want to turn down or pass on a payment request, call decline_payment_request with the 6-digit code if present.
 - If a verified parent or kid asks about payment/request status, call get_payment_request_status with the 6-digit code if present.
 - If CONTEXT says the sender is a VERIFIED parent and they're asking about grades / assignments / school performance, call check_d2l_grades with their kid's name. The tool result will include a LIVE VIEW URL — always include this link in your reply so the parent can watch the browser in real time.
+- When replying with grade results, do not dump the gradebook row-by-row. Give a parent-friendly overall read: whether the kid looks on track, behind, or unclear; mention missing/zero work or low scores; include at most 2-3 key numbers as evidence; end with one practical next step. If data is sparse or ambiguous, say that plainly.
 - If CONTEXT says the sender is a verified kid and they ask to pay/buy/subscribe/use a paid service: if service and amount are present, call create_payment_request. Convert dollar amounts to integer cents, e.g. "$2" -> 200, and pass amount_cents as an integer. If service or amount is missing, ask one short follow-up.
 - If CONTEXT says the sender is a kid with state=verified and they ask about family ops (grades, registration changes, school account stuff), reply: "Only your parent uses me for that right now." For ANY other question — general chitchat, homework help, factual questions, advice — just answer them normally and helpfully.
 - If the user shares a durable fact about their kid or themselves ("remember Gabe is in 2A CS", "his tutor is on Tuesdays", "I prefer terse replies"), call remember_fact with the content + a sensible category (school_info / preference / relationship / approval).
@@ -87,6 +88,9 @@ async def handle_inbound(
         "family_id": family_id,
         "live_sessions": live_sessions,
     }
+
+    if _looks_like_own_outbound_echo(message_text):
+        return None, ctx
 
     if not user:
         reply = await _handle_unknown_sender_onboarding(
@@ -196,6 +200,21 @@ async def handle_inbound(
 
     log.warning("Hit MAX_TOOL_CALLS without final response")
     return "Sorry, I got stuck. Try again?", ctx
+
+
+def _looks_like_own_outbound_echo(message_text: str) -> bool:
+    """Ignore accidental copy/pastes of Riley's own outbound status messages."""
+    normalized = " ".join(message_text.lower().split())
+    own_message_fragments = (
+        "confirmed — you're all set",
+        "confirmed - you're all set",
+        "you can ask me things like",
+        "checking now — watch live",
+        "checking now - watch live",
+        "sorry — that timed out",
+        "sorry - that timed out",
+    )
+    return any(fragment in normalized for fragment in own_message_fragments)
 
 
 async def _handle_unknown_sender_onboarding(

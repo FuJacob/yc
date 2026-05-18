@@ -64,6 +64,6 @@ D2L_PASSWORD = _env("D2L_PASSWORD", default="")
 
 # Limits
 MAX_TOOL_CALLS = 6  # bumped from 4 in rfc-7 — now 5 LLM tools (incl. remember_fact, recall)
-BROWSER_TIMEOUT_SECONDS = 90
+BROWSER_TIMEOUT_SECONDS = int(_env("BROWSER_TIMEOUT_SECONDS", default="180"))
 MEMORY_RECALL_LIMIT = 3
 MEMORY_TIMEOUT_SECONDS = 5

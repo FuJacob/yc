@@ -576,6 +576,9 @@ async def _dispatch_check_grades(sender_phone: str, student_name: str, ctx: dict
         if steps_sent >= MAX_STEP_MESSAGES:
             return
         summary = _humanize_step(summary)
+        if getattr(on_step, "last_summary", None) == summary:
+            return
+        on_step.last_summary = summary
         try:
             await send_message(to_number=sender_phone, body=summary)
             steps_sent += 1
