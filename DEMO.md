@@ -1,222 +1,137 @@
-# Demo Runbook — Grade Check Flow
+# Riley — 3-Minute Demo Script
 
-**Read on stage. Every text below is copy-pasteable.**
-
----
-
-## The Cast
-
-| Role | Number | Who holds it |
-|---|---|---|
-| **AgentPhone** (the agent) | `+1 (412) 654-3597` | nobody — it's the bot. Both human phones text *this* number. |
-| **Parent phone** (Jacob) | `+1 (613) 985-9829` | demo driver |
-| **Kid phone** (Gabe) | `+1 (786) 587-3754` | second phone — held by you or a teammate |
-
-Both phones must have **iMessage on** with the AgentPhone number (blue bubbles). SMS works as a fallback but requires 10DLC registration which we have not set up.
+**Format:** Pre-recorded video for judge submission.
+**Target:** 3 minutes flat. Tight, no filler.
 
 ---
 
-## Pre-Flight Checklist (T-10 min)
+## Setup Before Recording
 
-Run these in order. Stop at the first failure.
-
-### 1. Prime the Chrome profile with D2L
-```bash
-# In a terminal:
-open -na "Google Chrome" --args --user-data-dir="$PWD/chrome-profile"
-```
-- In the window that opens: visit https://learn.uwaterloo.ca/d2l/
-- Log in fully (complete Duo / 2FA if prompted)
-- Confirm you can see the homepage with course tiles
-- **Cmd+Q to quit Chrome completely** (don't just close the window — that won't release the profile lock)
-
-### 2. Reset to a clean slate
-```bash
-scripts/stop.sh
-scripts/reset-db.sh
-scripts/start.sh
-```
-Output should include `webhook registered: ... status=active`.
-
-### 3. Confirm everything is healthy
-```bash
-scripts/status.sh
-```
-Expect:
-- `server: running`
-- `tunnel: running`
-- `tunnel url: https://...` (write this down — it'll appear in iMessage live previews)
-- `familyops.db: 0 families, 0 users` (clean)
-- AgentPhone webhook `status: active`
-
-### 4. Smoke-test the wire end-to-end
-From **parent phone**, text `+14126543597`:
-> ping
->
-You should get *something* back within 5 seconds (the LLM will likely ask you to register). If you get nothing, the webhook is broken — abort and re-run `scripts/restart.sh`.
-
-Then reset state again:
-```bash
-scripts/reset-db.sh
-```
-
-You're ready.
+1. Run `./go.sh` (resets DB, restarts server)
+2. Have two phones ready: parent phone + kid phone
+3. Screen-record the parent phone (iPhone Mirroring or screen share)
+4. Have the browser live view ready to show on laptop
+5. AgentPhone number: `+1 (412) 654-3597`
 
 ---
 
-## The Demo Script (~90 seconds)
+## The Script
 
-### Segment 1 — Hook (10s, you talking)
-> "Parents juggle six school portals, fifty emails about permission slips, and a phone constantly buzzing with kid requests. We built one AI phone number that handles it. Watch."
+### [0:00–0:25] THE PROBLEM (voiceover, show phones/school portals)
 
-### Segment 2 — Onboarding (20s)
+> "If you're a parent, your kid's school life is scattered across six different portals, dozens of logins, and a phone that never stops buzzing. You want to know one simple thing — how's my kid doing? But you need to log into D2L, navigate three menus, remember which courses they're in, and somehow make sense of a gradebook designed for professors, not parents.
 
-**From parent phone, send to `+14126543597`:**
-> Hey, I'm Jacob — register my kid Gabe at +17865873754
+> And when your kid texts asking for money for some app — you can't even verify if their grades are up to date before saying yes.
 
-**Expected reply on parent phone (within ~5s):**
-> Got it Jacob — texting Gabe now to confirm.
-*(actual wording will vary; LLM phrases it on the fly)*
+> We built Riley. One phone number that handles all of it."
 
-**Watch the kid phone — it should get within ~5s:**
-> Hi Gabe, your parent Jacob just registered you with FamilyOps so they can help with school stuff like checking your grades. Reply YES to confirm this is you.
+### [0:25–0:55] ONBOARDING (show parent phone live)
 
-**From kid phone, send back:**
-> YES
+> "Here's how it works. I text Riley from my phone."
 
-**Expected on kid phone:**
-> Thanks Gabe — you're all set.
+**Parent sends:**
+> hey, i'm jacob. my kid is gaby and her number is [kid's number]
 
-**Expected on parent phone:**
-> Gabe is verified. Try asking 'what are Gabe's grades?'
+**Show Riley's reply** — it asks Gaby to confirm.
 
-### Segment 3 — Grade Query (40s)
+**Switch to kid phone — Gaby gets a text:**
+> "Hey Gaby, your parent Jacob just set you up with Riley..."
 
-**From parent phone:**
-> what are Gabe's grades?
+**Kid replies:** "yeah that's me"
 
-**Within 1-3s, parent phone gets an interstitial:**
-> Checking now…
-*(this comes from the LLM writing content alongside the tool call — flavor varies)*
+**Show both phones getting confirmation.**
 
-**Then on stage, on the demo laptop:**
-- A Chrome window opens up live
-- Browser Use navigates to `learn.uwaterloo.ca/d2l/`
-- It clicks into the Grades section, visits courses
-- Total time: ~20–40s
+> "That's it. Two texts, both sides verified, no app download, no account creation. Riley works over iMessage — the thing every family already uses."
 
-**Final reply on parent phone:**
-> Gabe's current grades:
-> CS 246: 87%
-> MATH 239: 92%
-> STAT 230: 78%
-> ENGL 109: 85%
-> Lowest: STAT 230 at 78%.
-*(actual numbers come from real D2L)*
+### [0:55–1:55] GRADE CHECK (the big moment — show parent phone + live browser)
 
-**Simultaneously the kid phone shows:**
-> FYI Jacob just checked your grades.
+> "Now the real magic. I ask Riley about Gaby's grades."
 
-### Segment 4 — Close (20s, you talking)
-> "Same architecture handles permission slips, kid purchase approvals, and school emails. Anywhere parents waste time on logistics, this agent goes. Today it's grades — that's where we started because it's the loudest pain. The phone is open."
+**Parent sends:**
+> how are gaby's grades looking?
 
----
+**Show the reply:** "checking now..." + live view link
 
-## What the Judges See on Screen
+> "Riley just spun up a cloud browser through Browser Use. It's logging into the University of Waterloo's D2L portal right now — the real one, with real credentials, real 2FA."
 
-Set up before stepping up:
+**Show the live browser view on laptop** — the browser navigating D2L, clicking into grades.
 
-- **Left half of laptop screen:** the demo laptop's `chrome-profile` Chrome (will be empty until you trigger the grade query, then Browser Use opens it).
-- **Right half:** mirror one phone (iPhone Mirroring → Continuity, or just stand the phone up under the document camera).
-- Don't try to mirror both phones — pick the parent phone. You can hold the kid phone up briefly when the FYI notification fires.
+> "The parent gets a live link to watch this happening in real time. No black box — you see exactly what Riley sees."
 
----
+**Show the final grade summary arriving on parent phone.**
 
-## Failure Modes & On-Stage Recovery
+> "Riley reads the gradebook and sends back a parent-friendly summary. Not a raw data dump — it tells you what matters. Which assignments are done, what's missing, and what to focus on next."
 
-### "Got it Jacob..." never arrives
-Cause: AgentPhone outbound is 502'ing (we hit this earlier today).
-**Recover:**
-- Don't panic on stage.
-- Say "the messaging vendor is having a moment — let me show you the captured flow" and switch to a screen recording you took during pre-flight.
+### [1:55–2:30] PAYMENT + MESSAGING (show kid phone → parent phone)
 
-### Kid never gets the verification text
-Same root cause (AP outbound flaky). After the demo:
-```bash
-scripts/resend-verification.sh
-```
-…retries with backoff.
+> "Now here's where it all connects. Gaby texts Riley asking to pay for something."
 
-### Browser Use opens Chrome but can't find Grades
-Cause: D2L session expired.
-**Recover:**
-- Pre-flight again: open Chrome with `--user-data-dir="$PWD/chrome-profile"`, re-log into D2L, Cmd+Q.
-- Don't do this on stage. Use your backup recording.
+**Kid sends:**
+> can you pay $2 for chegg?
 
-### "Chrome profile is locked" error in server logs
-Cause: a Chrome window is open against `./chrome-profile`.
-**Recover:**
-- `pkill -f "Google Chrome.*chrome-profile"` then retry. Fast.
+**Show parent phone getting the request:**
+> "gaby wants $2.00 for chegg. want to go ahead?"
 
-### iMessage shows green bubble instead of blue
-Either the AgentPhone number isn't on iMessage for that contact, or it's degrading to SMS. SMS is blocked by 10DLC right now. **You'll see no message arrive.** Pivot to backup recording.
+> "The parent sees the request in the same conversation. No separate app, no notification to hunt for."
 
-### LLM picks the wrong tool / sends a weird reply
-`gpt-5.4-nano` can be hit-or-miss. **Quick fix before demo:**
-```bash
-echo "ORCHESTRATOR_MODEL=gpt-5.4-mini" >> .env
-scripts/restart.sh
-```
-Buys you a smarter model on the same OpenAI key. Worth doing in pre-flight if budget allows.
+**Parent replies:** "yeah go ahead"
+
+> "Funds move instantly through Sponge Wallet on Solana. And because Riley just checked Gaby's grades, I know whether she's earned it."
+
+**Parent sends:**
+> actually, tell gaby to finish her mobius assignments first
+
+**Show kid phone receiving the message from Riley.**
+
+> "Riley can relay messages between parent and kid — the whole family runs through one agent."
+
+### [2:30–2:55] TECH + ARCHITECTURE (voiceover, show architecture diagram or README)
+
+> "Under the hood: AgentPhone handles all iMessage and SMS communication — it's the backbone that makes Riley reachable on every phone. Browser Use gives us cloud browsers with persistent profiles and live streaming, so we can navigate real school portals with real logins. Sponge moves real money on Solana when a parent approves a payment. Supermemory stores family context across conversations — grades, preferences, school info — so Riley gets smarter over time. And the orchestrator is an OpenAI tool-calling loop that ties it all together."
+
+### [2:55–3:00] CLOSE
+
+> "Six portals, one text. Riley — one AI agent for the whole family."
 
 ---
 
-## After the Demo
+## Key Points to Hit
 
-```bash
-scripts/status.sh
-```
-…should show 1 family, 2 verified users, and the most recent grade check in the log:
-```bash
-scripts/logs.sh | tail -50
-```
+These are what judges care about. Make sure every one lands:
 
-That's the receipt — judges can come ask to see real data, and we have it.
-
----
-
-## Optional: Memory Beat (only if `SUPERMEMORY_API_KEY` is set in `.env`)
-
-Add this line to the parent's first message:
-
-> Hey, I'm Jacob — register my kid Gabe at +17865873754. **Also remember Gabe is in 2A CS at Waterloo and his tutor is on Tuesdays.**
-
-The LLM will call `register_family` AND `remember_fact` in one turn.
-
-Then in Segment 3, instead of just "what are Gabe's grades?", ask:
-> what's Gabe up to this term, and how's he doing?
-
-The agent should pull both the school_info memory ("2A CS at Waterloo") AND the live grades, and weave them together:
-> Gabe is in 2A CS at Waterloo. Current grades: ... Lowest is STAT 230 at 78%. With his Tuesday tutor, that's the one to focus on.
-
-If memory is *not* enabled yet (SUPERMEMORY_API_KEY empty in .env), skip this beat — the agent will silently ignore the "also remember" clause.
+- **Real problem, real users.** Parents actually deal with this. It's not hypothetical.
+- **Works on iMessage.** No app download. No signup flow. Text a number and go.
+- **Live browser, not a mock.** The D2L login and grade scraping is real — show the live view.
+- **Real money moves.** Sponge sends actual funds on Solana. Not a simulation.
+- **Every sponsor tech is load-bearing.** AgentPhone (communication), Browser Use (grade checking), Sponge (payments), Supermemory (memory), OpenAI (orchestration). None are checkbox integrations.
+- **Multi-channel agent.** Voice, SMS, iMessage, browser, payments — all through one number.
+- **Two-sided.** Both parent and kid interact with the same agent. It's not a single-user tool.
 
 ---
 
-## One-Page Cheat Sheet (print this)
+## Backup Plan
+
+If anything breaks during recording:
+
+- **AgentPhone down:** Use a screen recording from a successful test run. Splice it in.
+- **D2L session expired:** Re-run `./go.sh` and re-login via Browser Use profile. Or use backup footage of a working grade check.
+- **Browser Use timeout:** Increase `BROWSER_TIMEOUT_SECONDS=240` in `.env` and retry.
+- **Payment fails:** Check `scripts/sponge-status.py` for wallet balance. Use backup footage if needed.
+
+Record multiple takes. Use the cleanest one. Judges won't know it's take 4.
+
+---
+
+## Pre-Recording Checklist
 
 ```
-AgentPhone (text it):  +1 412-654-3597
-Parent phone (texts from):  +1 613-985-9829  (you)
-Kid phone (texts from):     +1 786-587-3754  (teammate)
-
-T-10  scripts/stop.sh && scripts/reset-db.sh && scripts/start.sh
-T-5   open Chrome --user-data-dir=./chrome-profile, log into D2L, Cmd+Q
-T-2   text "ping" from parent → confirm reply
-
-DEMO:
-[parent → bot] Hey, I'm Jacob — register my kid Gabe at +17865873754
-[kid → bot]    YES
-[parent → bot] what are Gabe's grades?
-[wait ~30s, Browser Use runs visibly]
+[ ] ./go.sh ran clean
+[ ] Parent phone can text AgentPhone number (blue bubbles)
+[ ] Kid phone can text AgentPhone number (blue bubbles)
+[ ] Test onboarding flow end-to-end
+[ ] Test grade check — browser opens, grades return
+[ ] Test payment request — kid asks, parent approves, funds move
+[ ] Test send_message_to_kid — parent tells Riley to text the kid
+[ ] Screen recording software ready (parent phone + laptop for live view)
+[ ] Backup footage saved from test runs
 ```
