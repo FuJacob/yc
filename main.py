@@ -1,8 +1,9 @@
+import asyncio
 import json
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request
+from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse
 
 from agent import handle_inbound
@@ -27,6 +28,31 @@ app = FastAPI(title="FamilyOps", lifespan=lifespan)
 
 # In-memory mapping of session_id -> live_url for browser streaming (RFC-1)
 _live_sessions: dict[str, str] = {}
+
+# Per-phone message queue: ensures one message is fully processed before the
+# next starts, preventing interleaved replies during long-running tools like
+# Browser Use.  Each phone gets its own asyncio.Queue and a single worker task.
+_phone_queues: dict[str, asyncio.Queue] = {}
+_phone_workers: dict[str, asyncio.Task] = {}
+
+
+def _enqueue(phone: str, coro_args: dict) -> None:
+    if phone not in _phone_queues:
+        _phone_queues[phone] = asyncio.Queue()
+        _phone_workers[phone] = asyncio.create_task(_phone_worker(phone))
+    _phone_queues[phone].put_nowait(coro_args)
+
+
+async def _phone_worker(phone: str) -> None:
+    q = _phone_queues[phone]
+    while True:
+        args = await q.get()
+        try:
+            await _process_inbound(**args)
+        except Exception:
+            log.exception("Queued _process_inbound failed for %s", phone)
+        finally:
+            q.task_done()
 
 LIVE_PAGE_HTML = """<!DOCTYPE html>
 <html>
@@ -78,7 +104,6 @@ async def live_view(session_id: str):
 @app.post("/webhook")
 async def webhook(
     request: Request,
-    background_tasks: BackgroundTasks,
     x_webhook_signature: str = Header(default=""),
 ):
     raw = await request.body()
@@ -107,12 +132,11 @@ async def webhook(
 
     recent_history = payload.get("recentHistory") or []
 
-    background_tasks.add_task(
-        _process_inbound,
+    _enqueue(from_number, dict(
         from_number=from_number,
         message_text=message_text,
         recent_history=recent_history,
-    )
+    ))
     return {"ok": True}
 
 
