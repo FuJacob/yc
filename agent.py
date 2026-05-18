@@ -18,7 +18,7 @@ from db import (
     get_user_by_phone,
     save_onboarding_session,
 )
-import memory
+# import memory  # Supermemory disabled
 from tools import TOOL_SCHEMAS, dispatch_tool, normalize_phone
 
 log = logging.getLogger(__name__)
@@ -103,21 +103,13 @@ async def handle_inbound(
         if reply is not None:
             return reply, ctx
 
-    # Fire recall + build the DB context block. Both run in parallel —
-    # memory.recall has its own timeout + always returns [] on error.
     import asyncio
-    context_str, memories = await asyncio.gather(
-        asyncio.to_thread(_build_context, sender_phone),
-        memory.recall(family_id, message_text),
-    )
+    context_str = await asyncio.to_thread(_build_context, sender_phone)
 
     system_blocks = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "system", "content": f"CONTEXT:\n{context_str}"},
     ]
-    memories_block = memory.format_memories_block(memories)
-    if memories_block:
-        system_blocks.append({"role": "system", "content": memories_block})
 
     messages: list[dict] = system_blocks
 

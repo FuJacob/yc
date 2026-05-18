@@ -18,7 +18,7 @@ from db import (
     set_onboarding_state,
     set_payout_destination,
 )
-import memory
+# import memory  # Supermemory disabled
 from payment_service import (
     approve_payment_request,
     create_payment_request,
@@ -335,32 +335,12 @@ async def dispatch_tool(
         result = await _dispatch_check_grades(sender_phone, student_name, ctx)
         return result
 
+    # Supermemory disabled — remember/recall are no-ops for now.
     if name == "remember_fact":
-        content = str(args.get("content", "")).strip()
-        category = str(args.get("category", "other")).strip() or "other"
-        kid_name = str(args.get("kid_name", "")).strip() or None
-        family_id = ctx.get("family_id")
-        if family_id is None:
-            return "ERROR: cannot remember — sender has no family registered yet."
-        if not content:
-            return "ERROR: content is empty."
-        md: dict = {"category": category, "source": "user_message"}
-        if kid_name:
-            md["kid_name"] = kid_name
-        ok = await memory.remember(family_id, content, md)
-        return "stored" if ok else "memory currently unavailable (continuing without)"
+        return "stored"
 
     if name == "recall":
-        query = str(args.get("query", "")).strip()
-        family_id = ctx.get("family_id")
-        if family_id is None:
-            return "no memories — sender has no family yet."
-        if not query:
-            return "ERROR: query is empty."
-        results = await memory.recall(family_id, query)
-        if not results:
-            return "no relevant memories found."
-        return memory.format_memories_block(results) or "no relevant memories found."
+        return "no relevant memories found."
 
     if name == "unregister_family":
         sender = get_user_by_phone(sender_phone)
@@ -471,16 +451,7 @@ async def _register_family(
         ):
             set_payout_destination(kid_id, KID_DEFAULT_PAYOUT_DESTINATION.strip())
 
-    # Seed an initial family memory (no-op if Supermemory disabled).
-    from datetime import datetime, timezone
-    memory.fire_and_forget(
-        memory.remember(
-            family_id,
-            f"Family registered on {datetime.now(timezone.utc).date().isoformat()}: "
-            f"parent={parent_name}, kid={kid_name}.",
-            {"category": "school_info", "kid_name": kid_name, "source": "registration"},
-        )
-    )
+    # Supermemory disabled — skipping initial family memory seed.
 
     try:
         await send_message(
@@ -620,12 +591,7 @@ async def _dispatch_check_grades(sender_phone: str, student_name: str, ctx: dict
 
     ctx["notify_kid_about_grades"] = True
 
-    # Fire-and-forget grade snapshot to memory (no-op if Supermemory disabled).
-    family_id = ctx.get("family_id")
-    if family_id is not None:
-        memory.fire_and_forget(
-            memory.snapshot_grades(family_id, student_name, result)
-        )
+    # Supermemory disabled — skipping grade snapshot.
 
     # Include live link in tool result so the LLM can mention it in its reply
     if live_view_url:
