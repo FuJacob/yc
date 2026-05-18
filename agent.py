@@ -101,16 +101,17 @@ async def handle_inbound(
 
     messages: list[dict] = system_blocks
 
-    # Only include conversation history if the sender is known. After a DB
-    # reset the user is UNKNOWN but AgentPhone still sends stale history from
-    # the previous registration — feeding that to the LLM makes it hallucinate
-    # old names/state.
-    if user:
-        for h in recent_history or []:
-            role = "assistant" if h.get("direction") == "outbound" else "user"
-            content = h.get("content") or h.get("body") or h.get("message") or ""
-            if content:
-                messages.append({"role": role, "content": content})
+    # For unknown senders, only use the last 4 history entries — enough for
+    # multi-turn onboarding but drops stale context from before a DB reset.
+    # Known senders get the full history.
+    history = recent_history or []
+    if not user:
+        history = history[-4:]
+    for h in history:
+        role = "assistant" if h.get("direction") == "outbound" else "user"
+        content = h.get("content") or h.get("body") or h.get("message") or ""
+        if content:
+            messages.append({"role": role, "content": content})
 
     messages.append({"role": "user", "content": message_text})
 
