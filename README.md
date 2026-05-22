@@ -1,10 +1,10 @@
 # Riley
 
+### 🏆 1st Place: Best Use of Browser Use Track at the Call My Agent Hackathon
+
 ![Riley](frontend/readme.png)
 
 **Your kid has a phone. Now they have an agent.**
-
-1st Place: Best Use of Browser Use Track at the Call My Agent Hackathon.
 
 One phone number for the whole family. Text it and Riley checks grades, monitors browsing, manages calendars, approves spending, and relays messages between parent and kid. No app. No login. Just text.
 
