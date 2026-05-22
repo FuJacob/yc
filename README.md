@@ -2,6 +2,8 @@
 
 ### 🏆 1st Place: Best Use of Browser Use Track at the Call My Agent Hackathon
 
+---
+
 ![Riley](frontend/readme.png)
 
 **Your kid has a phone. Now they have an agent.**
